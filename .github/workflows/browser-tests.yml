@@ -1,0 +1,33 @@
+name: Browser gameplay tests
+on:
+  push:
+    branches: [main, 'test/**']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: browser-tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-gameplay-results
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
