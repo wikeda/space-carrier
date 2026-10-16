@@ -9,3 +9,7 @@ export function bossPose(stage, t) {
  default:return {x:6*Math.sin(t*.9),y:4+2.1*Math.sin(t*.57),z:-43+11*Math.sin(t*1.2),roll:.2*Math.cos(t*.9)};
  }
 }
+
+export function bossAnimationTime(state, entranceDuration=3) {
+ return state.phase==='bossIntro' ? entranceDuration-state.introTime : entranceDuration+(state.bossTime||0);
+}

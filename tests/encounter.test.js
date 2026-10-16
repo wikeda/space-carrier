@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGame,step,damage,hitBoss,STAGE_DURATION} from '../src/game.js';
-import {bossPose} from '../src/encounter.js';
+import {bossPose,bossAnimationTime} from '../src/encounter.js';
 test('boss arrival is a protected three second entrance after the eleven second wave',()=>{
  const s=createGame();s.stageTime=STAGE_DURATION-.01;step(s,.02);
  assert.equal(s.phase,'bossIntro');assert.equal(s.boss,true);
@@ -19,4 +19,10 @@ test('five boss trajectories differ, move visibly and stay in hittable bounds',(
   traces.push(JSON.stringify(poses));
  }
  assert.equal(new Set(traces).size,5);
+});
+
+test('boss articulated animation clock is continuous at entrance handover',()=>{
+ assert.equal(bossAnimationTime({phase:'bossIntro',introTime:.01}),2.99);
+ assert.equal(bossAnimationTime({phase:'boss',bossTime:0}),3);
+ assert.equal(bossAnimationTime({phase:'boss',bossTime:.05}),3.05);
 });

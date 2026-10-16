@@ -3,7 +3,7 @@ import { damage, hit, hitBoss, STAGES, BOSS_INTRO_DURATION } from "./game.js";
 import { cameraPose } from "./camera.js";
 import { crossesDepth } from "./collision.js";
 import { buildStageScenery, buildStageEnemy, buildStageBoss, animateStageBoss } from "./stage-art.js";
-import { bossPose } from "./encounter.js";
+import { bossPose, bossAnimationTime } from "./encounter.js";
 const CYAN = 0x66fff1,
   PINK = 0xff397c;
 export class FlightView {
@@ -521,7 +521,7 @@ export class FlightView {
             this.bossShot=1.35-s.sector*.09;
           }
         }
-        animateStageBoss(b,s.sector,s.bossTime||this.elapsed);
+        animateStageBoss(b,s.sector,bossAnimationTime(s,BOSS_INTRO_DURATION));
       }
       for (let i = this.entities.length - 1; i >= 0; i--) {
         const e = this.entities[i],

@@ -150,13 +150,16 @@ test('five worlds and five enemy silhouettes have distinct geometry',async({page
       s.sector=stage;s.phase='wave';s.boss=false;s.stageTime=0;s.status='paused';
       v.setStage(stage);
       for(const e of v.entities)v.disposeObject(e.mesh);v.entities=[];
-      v.enemy(s);const e=v.entities.at(-1);
+      const random=Math.random;Math.random=()=>.8;try{v.enemy(s);}finally{Math.random=random;}const e=v.entities.at(-1);
       e.mesh.position.set(0,3,-12);e.baseX=0;e.baseY=3;e.speed=0;
       v.renderer.render(v.scene,v.camera);
       const geometry=[];v.stageScenery.traverse(o=>{if(o.geometry)geometry.push(o.geometry.type);});
       return {world:v.stageScenery.userData.theme,model:e.mesh.userData.modelType,geometry:geometry.sort().join(',')};
     },stage);
     worlds.push(result.world);models.push(result.model);shapes.push(result.geometry);
+    await page.evaluate(()=>{window.__fixture.state().status='playing';});
+    await expect(page.locator('#sector')).toHaveText(`STAGE 0${stage} / 05`);
+    await page.evaluate(()=>{window.__fixture.state().status='paused';});
     expect(result.geometry.length).toBeGreaterThan(0);
     await page.screenshot({path:info.outputPath(`stage-${stage}-world-enemy.png`)});
   }
