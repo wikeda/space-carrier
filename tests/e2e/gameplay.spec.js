@@ -133,5 +133,7 @@ test('armored enemy, thick lasers and real kill shockwave render',async({page},i
   });
   expect(effect.kills).toBeGreaterThan(0);expect(effect.particles).toBeGreaterThanOrEqual(44);expect(effect.ring).toBe(true);
   await page.screenshot({path:info.outputPath('kill-shockwave.png')});
+  await page.evaluate(()=>{const v=window.__fixture.view(),s=window.__fixture.state();s.status='playing';v.tick(.12,s,true);s.status='paused';});
+  await page.screenshot({path:info.outputPath('kill-shockwave-expanded.png')});
   expect(errors).toEqual([]);
 });
