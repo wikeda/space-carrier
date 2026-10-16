@@ -40,6 +40,7 @@ function hideScreens() {
     $(id).hidden = true;
 }
 function announce(text) {
+  $("announcement").style.visibility = "visible";
   $("announcement").textContent = text;
   $("announcement").style.opacity = "1";
   announcementTimer = 2.5;
@@ -214,6 +215,7 @@ if (view)
   view.onDamage = () => {
     const remaining = hitsRemaining(state);
     announcementTimer = 0;
+    $("announcement").style.visibility = "hidden";
     $("announcement").style.opacity = "0";
     $("damage-alert").textContent = remaining ? `被弾！ あと${remaining}回で GAME OVER` : "撃破された！ GAME OVER";
     $("damage-alert").classList.add("visible");

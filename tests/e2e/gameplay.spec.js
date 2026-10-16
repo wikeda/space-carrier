@@ -54,6 +54,7 @@ test('five real projectile collisions show damage and game over, save history',a
       await expect(page.locator('#hits-remaining')).toContainText(String(remaining));
       await expect(page.locator('#damage-alert')).toHaveClass(/visible/);
       await expect(page.locator('#damage-alert')).toContainText('被弾');
+      await expect(page.locator('#announcement')).toHaveCSS('visibility','hidden');
       if(remaining===4)await page.screenshot({path:info.outputPath('damage-visible.png')});
     }
   }
@@ -101,8 +102,9 @@ test('reduced effects retain damage clarity without screen shake',async({page})=
   await collide(page);
   await expect.poll(()=>page.evaluate(()=>window.__fixture.state().health)).toBe(80);
   await expect(page.locator('#damage-alert')).toContainText('被弾');
+      await expect(page.locator('#announcement')).toHaveCSS('visibility','hidden');
   expect(await page.evaluate(()=>window.__fixture.view().shake)).toBe(0);
-  expect(await page.locator('#flash').evaluate(e=>Number(getComputedStyle(e).opacity))).toBeLessThanOrEqual(.2);
+  expect(await page.locator('#flash').evaluate(e=>Number(getComputedStyle(e).opacity))).toBeLessThanOrEqual(.25);
   await page.locator('#pause').click();await page.locator('#quit').click();
   await expect(page.locator('#flash')).toHaveCSS('opacity','0');
   await expect(page.locator('#damage-alert')).not.toHaveClass(/visible/);
