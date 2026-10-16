@@ -1,5 +1,5 @@
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const STAGE_DURATION = 22, TRANSITION_DURATION = 2, HIT_DAMAGE = 20;
+export const STAGE_DURATION = 11, TRANSITION_DURATION = 2, HIT_DAMAGE = 20;
 export const STAGES = [
   {name:'NEON COAST',boss:'PRISM SENTINEL',sky:0x080c22,floor:0x080f23,accent:0x66fff1,sun:0xff6a80,speed:48,hp:65},
   {name:'EMBER CANYON',boss:'INFERNO RAM',sky:0x250c13,floor:0x32140c,accent:0xffa240,sun:0xff4224,speed:55,hp:80},

@@ -317,21 +317,25 @@ export class FlightView {
     const x = (Math.random() - 0.5) * 17,
       y = 1.3 + Math.random() * 5.5;
     if (kind === "drone") {
-      const core = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.8),
-        new THREE.MeshStandardMaterial({
-          color: 0x7b224e,
-          emissive: 0xff215e,
-          emissiveIntensity: 0.6,
-          metalness: 0.7,
-          roughness: 0.3,
-        }),
-      );
-      g.add(core);
-      g.add(this.box(3, 0.15, 0.6, this.materials.dark));
-      g.add(this.box(3.3, 0.07, 0.13, this.materials.pink, 0, 0, 0.4));
-      const glow = this.glow(PINK, 3);
-      g.add(glow);
+      const accent = STAGES[s.sector-1].accent;
+      const armor = new THREE.MeshStandardMaterial({color:0x263348,metalness:.85,roughness:.28});
+      const hot = new THREE.MeshBasicMaterial({color:accent});
+      const hull = new THREE.Mesh(new THREE.ConeGeometry(.8,2.8,4),armor);
+      hull.rotation.x=Math.PI/2;hull.rotation.z=Math.PI/4;
+      hull.name='armored-hull';g.add(hull);
+      const visor=this.box(.75,.18,.6,this.materials.pink,0,.38,.55);g.add(visor);
+      for(const side of [-1,1]) {
+        const label=side<0?'left':'right';
+        const wing=this.box(1.6,.16,1.6,armor,side*1.1,-.08,-.3);
+        wing.rotation.y=side*.55;wing.rotation.z=side*-.12;
+        wing.name=`wing-${label}`;g.add(wing);
+        const fin=this.box(.12,.65,1,armor,side*1.35,.25,-.7);fin.rotation.z=side*-.25;g.add(fin);
+        const engine=this.box(.42,.42,1.4,armor,side*.8,-.08,-.9);
+        engine.name=`engine-${label}`;g.add(engine);
+        g.add(this.box(.3,.3,.12,hot,side*.8,-.08,-1.65));
+        g.add(this.box(.12,.13,1,this.materials.pink,side*1.5,-.04,.65));
+      }
+      const glow=this.glow(accent,2.4);glow.position.z=-1.5;g.add(glow);
     } else {
       g.add(
         this.box(
@@ -365,14 +369,18 @@ export class FlightView {
   }
   projectile(x, y, z, hostile = false) {
     const mesh = this.box(
-      hostile ? 0.22 : 0.08,
-      hostile ? 0.22 : 0.08,
-      hostile ? 0.7 : 2,
-      hostile ? this.materials.pink : this.materials.cyan,
+      hostile ? 0.22 : 0.2,
+      hostile ? 0.22 : 0.2,
+      hostile ? 0.7 : 3.8,
+      hostile ? this.materials.pink : new THREE.MeshBasicMaterial({color:0xffffff}),
       x,
       y,
       z,
     );
+    if (!hostile) {
+      const sleeve=this.box(.42,.42,4.3,new THREE.MeshBasicMaterial({color:CYAN,transparent:true,opacity:.36,blending:THREE.AdditiveBlending,depthWrite:false}));
+      mesh.add(sleeve);
+    }
     this.scene.add(mesh);
     this.bullets.push({ mesh, hostile, speed: hostile ? 52 : -180 });
   }
@@ -398,6 +406,16 @@ export class FlightView {
       });
     }
     this.shake = Math.max(this.shake, this.reduced ? 0 : (count>12 ? 0.24 : 0));
+  }
+  explosion(pos,color) {
+    this.burst(pos,color,this.reduced?6:42);
+    if(this.reduced)return;
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(.8,.09,6,28),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+    ring.name='kill-shockwave';ring.position.copy(pos);this.scene.add(ring);
+    this.particles.push({mesh:ring,v:new THREE.Vector3(),life:.45,expansion:9});
+    const flare=this.glow(0xffe5af,5);flare.position.copy(pos);this.scene.add(flare);
+    this.particles.push({mesh:flare,v:new THREE.Vector3(),life:.22,expansion:3});
+    this.shake=Math.max(this.shake,.38);
   }
   makeBoss(stage = 1) {
     const g = new THREE.Group();
@@ -618,7 +636,7 @@ export class FlightView {
                 if (e.hp <= 0) {
                   hit(s, e.kind === "drone" ? 100 : 150);
                   this.audio.play("kill");
-                  this.burst(q, e.kind === "drone" ? PINK : CYAN);
+                  this.explosion(q, e.kind === "drone" ? PINK : CYAN);
                   this.disposeObject(e.mesh);
                   this.entities.splice(j, 1);
                 }
@@ -655,7 +673,7 @@ export class FlightView {
       p.life -= dt;
       p.mesh.position.addScaledVector(p.v, dt);
       p.mesh.material.opacity = Math.max(0, p.life * 1.5);
-      p.mesh.scale.multiplyScalar(1 + dt);
+      p.mesh.scale.multiplyScalar(1 + dt*(p.expansion||1));
       if (p.life <= 0) {
         this.disposeObject(p.mesh);
         this.particles.splice(i, 1);

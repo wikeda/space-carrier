@@ -53,7 +53,7 @@ test('five real projectile collisions show damage and game over, save history',a
     if(remaining){
       await expect(page.locator('#hits-remaining')).toContainText(String(remaining));
       await expect(page.locator('#damage-alert')).toHaveClass(/visible/);
-      await expect(page.locator('#damage-alert')).toContainText('被弾');
+      await expect(page.locator('#damage-alert')).toContainText('HIT!');
       await expect(page.locator('#announcement')).toHaveCSS('visibility','hidden');
       if(remaining===4)await page.screenshot({path:info.outputPath('damage-visible.png')});
     }
@@ -101,12 +101,36 @@ test('reduced effects retain damage clarity without screen shake',async({page})=
   await page.locator('#reduced').check();await page.locator('#start').click();
   await collide(page);
   await expect.poll(()=>page.evaluate(()=>window.__fixture.state().health)).toBe(80);
-  await expect(page.locator('#damage-alert')).toContainText('被弾');
+  await expect(page.locator('#damage-alert')).toContainText('HIT!');
       await expect(page.locator('#announcement')).toHaveCSS('visibility','hidden');
   expect(await page.evaluate(()=>window.__fixture.view().shake)).toBe(0);
   expect(await page.locator('#flash').evaluate(e=>Number(getComputedStyle(e).opacity))).toBeLessThanOrEqual(.25);
   await page.locator('#pause').click();await page.locator('#quit').click();
   await expect(page.locator('#flash')).toHaveCSS('opacity','0');
   await expect(page.locator('#damage-alert')).not.toHaveClass(/visible/);
+  expect(errors).toEqual([]);
+});
+test('armored enemy, thick lasers and real kill shockwave render',async({page},info)=>{
+  const errors=await boot(page);
+  const geometry=await page.evaluate(()=>{
+    const v=window.__fixture.view(),s=window.__fixture.state();
+    const original=Math.random;Math.random=()=>.8;
+    try{v.enemy(s);}finally{Math.random=original;}
+    const enemy=v.entities.at(-1);enemy.mesh.position.set(0,3,-12);enemy.baseX=0;enemy.phase=-v.elapsed*2;enemy.speed=0;enemy.hp=1;
+    v.projectile(0,3,-5,false);const laser=v.bullets.at(-1);
+    s.status='paused';
+    v.renderer.render(v.scene,v.camera);
+    return {parts:enemy.mesh.children.map(c=>c.name),width:laser.mesh.geometry.parameters.width,sleeve:laser.mesh.children[0].geometry.parameters.width};
+  });
+  expect(geometry.parts).toEqual(expect.arrayContaining(['armored-hull','wing-left','wing-right','engine-left','engine-right']));
+  expect(geometry.width).toBeGreaterThanOrEqual(.2);expect(geometry.sleeve).toBeGreaterThanOrEqual(.4);
+  await page.screenshot({path:info.outputPath('fighter-thick-laser.png')});
+  const effect=await page.evaluate(()=>{
+    const v=window.__fixture.view(),s=window.__fixture.state();
+    s.status='playing';v.tick(.04,s,true);s.status='paused';
+    return {kills:s.kills,particles:v.particles.length,ring:v.particles.some(p=>p.mesh.name==='kill-shockwave')};
+  });
+  expect(effect.kills).toBeGreaterThan(0);expect(effect.particles).toBeGreaterThanOrEqual(44);expect(effect.ring).toBe(true);
+  await page.screenshot({path:info.outputPath('kill-shockwave.png')});
   expect(errors).toEqual([]);
 });
