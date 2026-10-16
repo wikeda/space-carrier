@@ -817,3 +817,5 @@ body.reduced .vignette {
 #damage-alert.visible { opacity:1; transform:translate(-50%,0); }
 .health-row #health-number { min-width:45px; font-weight:900; }
 @media(max-width:700px) { #hits-remaining {top:103px;left:20px;font-size:12px;} #boss-bar {top:145px;} }
+#announcement { padding:0 5%; overflow-wrap:anywhere; line-height:1.22; }
+@media(max-width:700px) { #announcement {font-size:clamp(18px,4.5vw,28px);letter-spacing:1.5px;top:28%;} #damage-alert {top:39%;font-size:clamp(19px,5vw,28px);} }

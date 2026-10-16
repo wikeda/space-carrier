@@ -44,6 +44,12 @@ function announce(text) {
   $("announcement").style.opacity = "1";
   announcementTimer = 2.5;
 }
+function clearDamageFeedback() {
+  damageTimer = 0;
+  $("damage-alert").textContent = "";
+  $("damage-alert").classList.remove("visible");
+  $("flash").style.opacity = "0";
+}
 function start() {
   if (!view) return;
   audio.unlock();
@@ -54,10 +60,8 @@ function start() {
   keys.clear();
   pointer = null;
   saved = false;
-  damageTimer = 0;
+  clearDamageFeedback();
   lastPhase = "wave";
-  $("damage-alert").textContent = "";
-  $("flash").style.opacity = "0";
   lastSector = 1;
   hideScreens();
   $("hud").hidden = false;
@@ -66,6 +70,7 @@ function start() {
   announce("STAGE 01 / 05 // NEON COAST");
 }
 function home() {
+  clearDamageFeedback();
   state = null;
   keys.clear();
   pointer = null;
@@ -99,6 +104,7 @@ function activateBoost() {
 function finish() {
   if (saved) return;
   saved = true;
+  clearDamageFeedback();
   const isBest = state.score > data.best;
   data = record(data, state);
   persist();
@@ -207,6 +213,8 @@ for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
 if (view)
   view.onDamage = () => {
     const remaining = hitsRemaining(state);
+    announcementTimer = 0;
+    $("announcement").style.opacity = "0";
     $("damage-alert").textContent = remaining ? `被弾！ あと${remaining}回で GAME OVER` : "撃破された！ GAME OVER";
     $("damage-alert").classList.add("visible");
     $("flash").style.opacity = data.settings.reduced ? ".16" : ".72";
