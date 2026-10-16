@@ -67,7 +67,7 @@
         ><small>反重力ドライブ、オンライン。</small>
       </div>
       <footer class="menu-footer">
-        <span>3 SECTORS <i> / </i> 1 FINAL BOSS <i> / </i> FULL THROTTLE</span
+        <span>5 STAGES <i> / </i> 5 BOSS BATTLES <i> / </i> FULL THROTTLE</span
         ><label><input id="reduced" type="checkbox" /> 軽量エフェクト</label>
       </footer>
     </main>
@@ -83,11 +83,13 @@
       <div class="health-row">
         <small>HULL</small>
         <div class="meter"><i id="health"></i></div>
-        <span id="health-number">100</span>
+        <span id="health-number">5 / 5</span>
       </div>
+      <div id="hits-remaining" aria-live="polite">あと5回で GAME OVER</div>
+      <div id="damage-alert" role="status"></div>
       <div id="combo"></div>
       <div id="boss-bar" hidden>
-        <small>WARNING // SENTINEL</small>
+        <small id="boss-name">WARNING // PRISM SENTINEL</small>
         <div class="meter"><i id="boss-health"></i></div>
       </div>
       <div id="announcement"></div>

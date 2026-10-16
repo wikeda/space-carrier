@@ -28,7 +28,7 @@ export function load(db) {
                 finite(r.time) &&
                 finite(r.sector) &&
                 r.sector >= 1 &&
-                r.sector <= 3 &&
+                r.sector <= 5 &&
                 (r.status === "won" || r.status === "lost") &&
                 validDate(r.date),
             )

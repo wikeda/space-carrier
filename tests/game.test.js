@@ -41,16 +41,25 @@ test("pause freezes time and restart has no carried state", () => {
   assert.equal(s.time, 0);
   assert.equal(game.createGame().score, 0);
 });
-test("boss starts after third sector and defeating it wins", () => {
+test("every stage has a boss and only fifth boss wins", () => {
   const s = game.createGame();
-  for (let i = 0; i < 106 * 60; i++) game.step(s, 1 / 60, {});
-  assert.equal(s.boss, true);
-  game.hitBoss(s, 999);
-  assert.equal(s.status, "won");
+  for (let stage=1; stage<=5; stage++) {
+    assert.equal(s.sector, stage);
+    for(let i=0;i<23*60;i++) game.step(s,1/60);
+    assert.equal(s.boss,true);
+    game.hitBoss(s,999);
+    if(stage<5) {
+      assert.equal(s.status,"playing");
+      assert.equal(s.phase,"transition");
+      for(let i=0;i<121;i++) game.step(s,1/60);
+    }
+  }
+  assert.equal(s.status,"won");
 });
 test("damage can end run", () => {
   const s = game.createGame();
-  game.damage(s, 100);
+  s.health = 20;
+  game.damage(s);
   assert.equal(s.status, "lost");
 });
 test("storage survives corruption and blocked reads", () => {
@@ -98,7 +107,8 @@ test("blocked writes do not crash the game", () => {
 test("late projectile cannot alter score or combo after fatal damage", () => {
   const s = game.createGame();
   game.hit(s, 100);
-  game.damage(s, 100);
+  s.health = 20;
+  game.damage(s);
   const frozen = { ...s };
   game.hit(s, 100);
   assert.deepEqual(s, frozen);
@@ -137,4 +147,42 @@ test("loading discards implausible or malformed history while preserving valid r
   });
   assert.deepEqual(result.runs, [valid]);
   assert.equal(result.best, 0);
+});
+
+
+test("all collision types cost one of five hits", () => {
+  const s=game.createGame();
+  for(let i=4;i>=0;i--) {
+    s.invincible=0;
+    game.damage(s,12);
+    assert.equal(s.health,i*20);
+    assert.equal(game.hitsRemaining(s),i);
+  }
+  assert.equal(s.status,"lost");
+});
+test("stage transitions protect player and freeze wave timer",()=>{
+ const s=game.createGame();
+ for(let i=0;i<1400;i++) game.step(s,1/60);
+ game.hitBoss(s,999);
+ const health=s.health;
+ game.damage(s);
+ assert.equal(s.health,health);
+ game.step(s,.05);
+ assert.equal(s.stageTime,0);
+});
+test("five distinct worlds and bosses",()=>{
+ assert.equal(game.STAGES.length,5);
+ assert.equal(new Set(game.STAGES.map(s=>s.name)).size,5);
+ assert.equal(new Set(game.STAGES.map(s=>s.boss)).size,5);
+});
+test("movement and boost recharge are faster",()=>{
+ const s=game.createGame();game.step(s,.05,{x:1,y:1});
+ assert.ok(s.x>=.9);assert.ok(s.y>=3.7);
+ game.boost(s);for(let i=0;i<361;i++)game.step(s,1/60);
+ assert.equal(s.boostCharge,1);
+});
+test("stage five history survives reload",()=>{
+ let raw;const db={setItem:(_,v)=>raw=v,getItem:()=>raw};
+ store.record(store.load(db),{score:100,sector:5,time:200,status:"won"},db);
+ assert.equal(store.load(db).runs[0]?.sector,5);
 });

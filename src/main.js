@@ -1,4 +1,4 @@
-import { createGame, step, boost, clamp } from "./game.js";
+import { createGame, step, boost, clamp, STAGES, hitsRemaining } from "./game.js";
 import { load, save, record } from "./storage.js";
 import { FlightView } from "./view.js";
 import { AudioFX } from "./audio.js";
@@ -13,7 +13,9 @@ let data = load(),
   last = performance.now(),
   lastSector = 0,
   announcementTimer = 0,
-  saved = false;
+  saved = false,
+  damageTimer = 0,
+  lastPhase = "wave";
 try {
   view = new FlightView($("scene"), audio);
 } catch (err) {
@@ -52,12 +54,16 @@ function start() {
   keys.clear();
   pointer = null;
   saved = false;
+  damageTimer = 0;
+  lastPhase = "wave";
+  $("damage-alert").textContent = "";
+  $("flash").style.opacity = "0";
   lastSector = 1;
   hideScreens();
   $("hud").hidden = false;
   document.body.classList.add("playing");
   last = performance.now();
-  announce("SECTOR 01 // NEON COAST");
+  announce("STAGE 01 / 05 // NEON COAST");
 }
 function home() {
   state = null;
@@ -99,12 +105,12 @@ function finish() {
   $("hud").hidden = true;
   $("result-screen").hidden = false;
   $("result-title").textContent =
-    state.status === "won" ? "LIMIT BROKEN." : "NICE RUN.";
+    state.status === "won" ? "LIMIT BROKEN." : "GAME OVER";
   $("result-kicker").textContent =
-    state.status === "won" ? "MISSION COMPLETE" : "FLIGHT COMPLETE";
+    state.status === "won" ? "MISSION COMPLETE" : "HULL DESTROYED";
   $("result-subtitle").textContent =
     state.status === "won"
-      ? "全セクター制覇。空は、君のものだ。"
+      ? "5ステージ・全ボス制覇。空は、君のものだ。"
       : "もう一度、限界の向こうへ。";
   $("final-score").textContent = fmt(state.score);
   $("new-best").textContent = isBest ? "NEW PERSONAL BEST ↗" : "";
@@ -149,7 +155,7 @@ $("history").onclick = () => {
       detail = document.createElement("small"),
       date = document.createElement("span");
     score.textContent = fmt(r.score);
-    detail.textContent = `SECTOR ${r.sector} · ${r.time}s · ${r.status === "won" ? "CLEAR" : "FLIGHT"}`;
+    detail.textContent = `STAGE ${r.sector} · ${r.time}s · ${r.status === "won" ? "CLEAR" : "FLIGHT"}`;
     date.textContent = Number.isNaN(Date.parse(r.date))
       ? "—"
       : new Date(r.date).toLocaleDateString("ja-JP");
@@ -200,8 +206,11 @@ for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
   canvas.addEventListener(event, () => (pointer = null));
 if (view)
   view.onDamage = () => {
-    $("flash").style.opacity = ".55";
-    setTimeout(() => ($("flash").style.opacity = "0"), 140);
+    const remaining = hitsRemaining(state);
+    $("damage-alert").textContent = remaining ? `被弾！ あと${remaining}回で GAME OVER` : "撃破された！ GAME OVER";
+    $("damage-alert").classList.add("visible");
+    $("flash").style.opacity = data.settings.reduced ? ".16" : ".72";
+    damageTimer = 1.15;
   };
 function frame(now) {
   const dt = Math.min(0.04, Math.max(0, (now - last) / 1000));
@@ -219,24 +228,26 @@ function frame(now) {
     if (state.sector !== lastSector) {
       lastSector = state.sector;
       announce(
-        `SECTOR 0${state.sector} // ${["", "NEON COAST", "CHROME CANYON", "MIDNIGHT RUSH"][state.sector]}`,
+        `STAGE 0${state.sector} / 05 // ${STAGES[state.sector-1].name}`,
       );
     }
-    if (state.boss && !view.bossMesh) announce("WARNING // SENTINEL");
+    if (state.phase !== lastPhase) {
+      if(state.phase === "boss") announce(`WARNING // ${STAGES[state.sector-1].boss}`);
+      if(state.phase === "transition") { announce(`STAGE ${state.sector} CLEAR! +${state.sector*5000}`); audio.play("win"); }
+      lastPhase = state.phase;
+    }
   }
   view?.tick(dt, state, playing);
   if (state) {
     $("score").textContent = fmt(state.score);
-    $("sector").textContent = `SECTOR 0${state.sector}`;
-    $("sector-name").textContent = [
-      "",
-      "NEON COAST",
-      "CHROME CANYON",
-      "MIDNIGHT RUSH",
-    ][state.sector];
+    $("sector").textContent = `STAGE 0${state.sector} / 05`;
+    $("sector-name").textContent = STAGES[state.sector-1].name;
+    $("boss-name").textContent = `BOSS ${state.sector} // ${STAGES[state.sector-1].boss}`;
+    $("hits-remaining").textContent = `あと${hitsRemaining(state)}回で GAME OVER`;
+    $("hits-remaining").classList.toggle("critical", hitsRemaining(state)<=2);
     $("health").style.width = state.health + "%";
     $("health").style.background = state.health < 35 ? "#ff4e8e" : "#76fff5";
-    $("health-number").textContent = state.health;
+    $("health-number").textContent = `${hitsRemaining(state)} / 5`;
     $("combo").textContent =
       state.combo >= 3
         ? `${state.combo} COMBO ×${Math.min(5, 1 + Math.floor(state.combo / 5))}`
@@ -248,7 +259,7 @@ function frame(now) {
     $("boost-label").textContent =
       state.boostCharge >= 1
         ? "BOOST ↗"
-        : `${Math.ceil((1 - state.boostCharge) * 9)}s RECHARGE`;
+        : `${Math.ceil((1 - state.boostCharge) * 6)}s RECHARGE`;
     $("boost").disabled = state.boostCharge < 1;
     const carScreen = view?.car.position.clone().project(view.camera);
     if (carScreen) {
@@ -257,6 +268,11 @@ function frame(now) {
         clamp((-carScreen.y * 0.5 + 0.5) * 100 - 16, 20, 75) + "%";
     }
     if (state.status === "won" || state.status === "lost") finish();
+  }
+  if (damageTimer > 0 && playing) {
+    damageTimer -= dt;
+    $("flash").style.opacity = String(Math.max(0, damageTimer-.7)*(data.settings.reduced ? .3 : 1.5));
+    if (damageTimer<=0) $("damage-alert").classList.remove("visible");
   }
   if (playing && announcementTimer > 0) {
     announcementTimer -= dt;

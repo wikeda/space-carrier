@@ -809,3 +809,11 @@ body.reduced .vignette {
     height: 40px;
   }
 }
+/* Damage is a single fading edge pulse, never rapid full-screen strobing. */
+#flash { background: radial-gradient(ellipse, transparent 35%, #ff2459 100%); transition: opacity .12s; pointer-events:none; }
+#hits-remaining { position:absolute; top:119px; left:38px; font-size:15px; font-weight:800; color:#a5fff3; letter-spacing:.05em; }
+#hits-remaining.critical { color:#ff668d; }
+#damage-alert { position:absolute; top:31%; left:50%; transform:translate(-50%,-5px); width:90%; text-align:center; color:#fff; font-weight:900; font-size:clamp(22px,4vw,44px); text-shadow:0 3px 0 #6b072e,0 0 25px #ff2459; opacity:0; pointer-events:none; transition:opacity .1s,transform .12s; }
+#damage-alert.visible { opacity:1; transform:translate(-50%,0); }
+.health-row #health-number { min-width:45px; font-weight:900; }
+@media(max-width:700px) { #hits-remaining {top:103px;left:20px;font-size:12px;} #boss-bar {top:145px;} }
