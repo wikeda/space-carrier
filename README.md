@@ -31,3 +31,23 @@ Settings → Pages → Deploy from a branch → main / (root) → Save で配信
 `src/game.js`: 純粋なルール / `storage.js`: 保存 / `view.js`: Three.jsワールドと衝突 / `main.js`: UI・入力 / `audio.js`: Web Audio合成音。
 
 全ての車・敵・背景・エフェクト・音声はコードによるオリジナル生成。既存ゲームの名称・キャラクター・画像・音源は使用していません。Three.js は MIT (vendor/THREE-LICENSE.txt)。タイトルはオリジナルで、SpaceX との関連・提携はありません。
+
+### Stage identity & boss encounters
+
+Five worlds now replace their foreground geometry: alien canopy, canyon columns,
+crystal arches, floating ruins, orbital machinery. Each has its own enemy mesh
+and movement motif. World geometry stays outside the playable corridor.
+
+After each 11-second wave a 3-second protected boss entrance clears ALL regular
+enemies, obstacles and projectiles. A portal, cinematic border and rising audio
+cue announce the boss without strobing; reduced effects keep the telegraph.
+Bosses then follow five different bounded paths (sweep, ram, orbit, serpent,
+solar weave), with aimed shots emitted from their visible locations. The player
+can dodge the locked direction. No regular enemies spawn during either entrance
+or combat. Existing 5-hit health, local-only history, mobile controls and laser
+visibility remain.
+
+Inspiration (original procedural art, no reused SEGA assets):
+- https://archives.sega.jp/segaages/sh/ — fantastical creatures and mechanical enemies
+- https://segaages.sega.com/project/space-harrier/index.htm — forward movement and obstacle dodging
+- https://faq.sega.jp/hc/ja/articles/360025470534 — movement avoids aimed enemy attacks

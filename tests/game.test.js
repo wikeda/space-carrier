@@ -195,7 +195,9 @@ test("all five bosses arrive after roughly 11 seconds without changing their hea
     for (let frame = 0; frame < 10 * 60; frame++) game.step(s, 1 / 60);
     assert.equal(s.phase, "wave");
     for (let frame = 0; frame < 61; frame++) game.step(s, 1 / 60);
-    assert.equal(s.phase, "boss");
+    assert.equal(s.phase, "bossIntro");
+    for(let frame=0;frame<181;frame++)game.step(s,1/60);
+    assert.equal(s.phase,"boss");
     assert.equal(s.bossHealth, bossHealth[stage - 1]);
     assert.equal(s.bossMax, bossHealth[stage - 1]);
     game.hitBoss(s, bossHealth[stage - 1]);

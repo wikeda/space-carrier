@@ -1,7 +1,9 @@
 import * as THREE from "../vendor/three.module.js";
-import { damage, hit, hitBoss, STAGES } from "./game.js";
+import { damage, hit, hitBoss, STAGES, BOSS_INTRO_DURATION } from "./game.js";
 import { cameraPose } from "./camera.js";
 import { crossesDepth } from "./collision.js";
+import { buildStageScenery, buildStageEnemy, buildStageBoss, animateStageBoss } from "./stage-art.js";
+import { bossPose } from "./encounter.js";
 const CYAN = 0x66fff1,
   PINK = 0xff397c;
 export class FlightView {
@@ -160,9 +162,10 @@ export class FlightView {
     this.grid.position.set(0, -0.65, -110);
     this.scene.add(this.grid);
     this.road = [];
+    this.roadEdges=[];
     for (const x of [-12, 12]) {
       const l = this.box(0.12, 0.04, 320, this.materials.cyan, x, -0.5, -140);
-      this.scene.add(l);
+      this.scene.add(l);this.roadEdges.push(l);
     }
     for (let i = 0; i < 30; i++) {
       const l = this.box(
@@ -270,13 +273,17 @@ export class FlightView {
     this.halo.material.color.setHex(theme.sun);
     this.sun.rotation.z = stage===4 ? .3 : 0;
     this.sun.scale.setScalar(stage===5 ? 1.4 : stage===3 ? .7 : 1);
-    this.towers.forEach((tower,i)=>{
-      tower.scale.set(stage===2 ? 1.5 : 1,stage===3 ? .5 : stage===5 ? 1.4 : 1,1);
-      tower.rotation.z=stage===4 ? (i%2 ? .16 : -.16) : 0;
-      tower.children[0].material.color.setHex(theme.floor);
-      tower.children[1].material.color.setHex(theme.accent);
-    });
+    // Replace geometry, not just its palette. Side scenery never collides with the car.
+    if(this.stageScenery)this.disposeObject(this.stageScenery);
+    this.stageScenery=buildStageScenery(stage);this.scene.add(this.stageScenery);
+    this.towers.forEach(t=>t.visible=false);
+    this.road.forEach(t=>t.visible=stage===1);
+    this.roadEdges.forEach(t=>t.visible=stage===1);
+    this.grid.visible=stage===1||stage===5;
+    this.sun.visible=stage!==3&&stage!==4;
+    this.halo.visible=stage!==3&&stage!==4;
   }
+
   resize() {
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.fov = cameraPose(this.camera.aspect).fov;
@@ -305,6 +312,8 @@ export class FlightView {
       this.disposeObject(this.bossMesh);
       this.bossMesh = null;
     }
+    if(this.introPortal){this.disposeObject(this.introPortal);this.introPortal=null;}
+    this.lastCombatPhase=null;
     this.shot = 0;
     this.spawn = 0.15;
     this.worldStage = 0;
@@ -312,51 +321,9 @@ export class FlightView {
     this.shake = 0;
   }
   enemy(s) {
-    const kind = Math.random() < 0.22 ? "obstacle" : "drone",
-      g = new THREE.Group();
-    const x = (Math.random() - 0.5) * 17,
-      y = 1.3 + Math.random() * 5.5;
-    if (kind === "drone") {
-      const accent = STAGES[s.sector-1].accent;
-      const armor = new THREE.MeshStandardMaterial({color:0x263348,metalness:.85,roughness:.28});
-      const hot = new THREE.MeshBasicMaterial({color:accent});
-      const hull = new THREE.Mesh(new THREE.ConeGeometry(.8,2.8,4),armor);
-      hull.rotation.x=Math.PI/2;hull.rotation.z=Math.PI/4;
-      hull.name='armored-hull';g.add(hull);
-      const visor=this.box(.75,.18,.6,this.materials.pink,0,.38,.55);g.add(visor);
-      for(const side of [-1,1]) {
-        const label=side<0?'left':'right';
-        const wing=this.box(1.6,.16,1.6,armor,side*1.1,-.08,-.3);
-        wing.rotation.y=side*.55;wing.rotation.z=side*-.12;
-        wing.name=`wing-${label}`;g.add(wing);
-        const fin=this.box(.12,.65,1,armor,side*1.35,.25,-.7);fin.rotation.z=side*-.25;g.add(fin);
-        const engine=this.box(.42,.42,1.4,armor,side*.8,-.08,-.9);
-        engine.name=`engine-${label}`;g.add(engine);
-        g.add(this.box(.3,.3,.12,hot,side*.8,-.08,-1.65));
-        g.add(this.box(.12,.13,1,this.materials.pink,side*1.5,-.04,.65));
-      }
-      const glow=this.glow(accent,2.4);glow.position.z=-1.5;g.add(glow);
-      // Keep the visible fighter inside its existing collision envelope.
-      g.scale.x=.59;
-    } else {
-      g.add(
-        this.box(
-          1.3,
-          3.5,
-          1.3,
-          new THREE.MeshStandardMaterial({
-            color: 0x292e58,
-            emissive: 0x522263,
-            emissiveIntensity: 0.4,
-          }),
-        ),
-      );
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(1.15, 0.055, 6, 16),
-        this.materials.pink,
-      );
-      g.add(ring);
-    }
+    const kind = Math.random() < 0.22 ? "obstacle" : "drone";
+    const g=buildStageEnemy(s.sector,kind==='obstacle');
+    const x=(Math.random()-.5)*17,y=1.3+Math.random()*5.5;
     g.position.set(x, y, -120);
     this.scene.add(g);
     this.entities.push({
@@ -365,7 +332,7 @@ export class FlightView {
       hp: kind === "drone" ? 2 : 5,
       r: kind === "drone" ? 1.3 : 1.25,
       speed: kind === "drone" ? 48 + s.sector * 4 : 46,
-      baseX: x,
+      baseX: x,baseY:y,stage:s.sector,
       phase: Math.random() * 6,
     });
   }
@@ -387,7 +354,7 @@ export class FlightView {
     this.bullets.push({ mesh, hostile, speed: hostile ? 52 : -180 });
   }
   burst(pos, color, count = 18) {
-    for (let i = 0; i < (this.reduced ? 6 : count); i++) {
+    for (let i = 0; i < (this.reduced ? 6 : count) && this.particles.length < (this.reduced ? 80 : 360); i++) {
       const mesh = this.box(
         0.11,
         0.11,
@@ -420,56 +387,26 @@ export class FlightView {
     this.shake=Math.max(this.shake,.38);
   }
   makeBoss(stage = 1) {
-    const g = new THREE.Group();
-    g.add(this.box(7, 1.2, 3, this.materials.dark));
-    g.add(this.box(3, 2.6, 3, this.materials.dark));
-    g.add(this.box(6, 0.12, 0.1, this.materials.pink, 0, 0, 1.6));
-    const core = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.2, 1),
-      new THREE.MeshStandardMaterial({
-        color: 0xff89b7,
-        emissive: 0xff1264,
-        emissiveIntensity: 2,
-      }),
-    );
-    core.position.set(0, 0, 1.6);
-    g.add(core);
-    for (const x of [-4.5, 4.5]) {
-      g.add(this.box(2.3, 2, 0.8, this.materials.dark, x, 0, 0));
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(1.1, 0.09, 8, 20),
-        this.materials.pink,
-      );
-      ring.position.set(x, 0, 0.6);
-      g.add(ring);
+    const g = buildStageBoss(stage);
+    g.position.set(0, 4, -140);
+    this.scene.add(g);this.bossMesh=g;
+  }
+  clearCombat() {
+    for(const list of [this.entities,this.bullets]) {
+      for(const item of list)this.disposeObject(item.mesh);list.length=0;
     }
-    const glow = this.glow(PINK, 10);
-    glow.position.z = 1;
-    g.add(glow);
-    // Stage silhouettes: scout wings, ram horns, orbit rings, hydra heads, solar crown.
-    const accent = new THREE.MeshBasicMaterial({color:STAGES[stage-1].accent});
-    for(let i=0;i<stage;i++) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.1+i*.45,.12,8,32),accent);
-      ring.rotation.y = stage===3 ? i*.8 : 0;
-      ring.rotation.x = stage===4 ? Math.PI/2 : i*.22;
-      ring.position.set(0,0,-.6-i*.2);g.add(ring);
+  }
+  beginBossIntro(s) {
+    this.clearCombat();this.bossShot=.65;
+    if(!this.bossMesh)this.makeBoss(s.sector);
+    if(this.introPortal)this.disposeObject(this.introPortal);
+    const portal=new THREE.Group();portal.name='boss-entry-portal';
+    for(let i=0;i<3;i++){
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(6+i*1.8,.12,6,48),new THREE.MeshBasicMaterial({color:STAGES[s.sector-1].accent,transparent:true,opacity:.65,depthWrite:false}));
+      ring.rotation.z=i*.3;portal.add(ring);
     }
-    if(stage===2) for(const x of [-3,3]) {
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(.8,4,6),accent);
-      horn.rotation.x=Math.PI/2;horn.position.set(x,.4,1);g.add(horn);
-    }
-    if(stage===4) for(const x of [-3,3]) {
-      const head=new THREE.Mesh(new THREE.IcosahedronGeometry(1.2,0),accent);
-      head.position.set(x,1.3,2);g.add(head);
-    }
-    if(stage===5) for(let i=0;i<8;i++) {
-      const spike=new THREE.Mesh(new THREE.ConeGeometry(.5,2.7,4),accent);
-      const a=i*Math.PI/4;spike.position.set(Math.cos(a)*4,Math.sin(a)*3,0);
-      spike.rotation.z=a-Math.PI/2;g.add(spike);
-    }
-    g.position.set(0, 4, -65);
-    this.scene.add(g);
-    this.bossMesh = g;
+    portal.position.set(0,4,-65);this.scene.add(portal);this.introPortal=portal;
+    this.audio.play('warning');
   }
   tick(dt, s, playing) {
     if (!playing && s?.status === "paused") {
@@ -478,6 +415,12 @@ export class FlightView {
     }
     this.elapsed += dt;
     if(playing && this.worldStage !== s.sector) this.setStage(s.sector);
+    if(playing && this.lastCombatPhase!==s.phase) {
+      if(s.phase==='bossIntro')this.beginBossIntro(s);
+      if(s.phase==='boss'&&this.lastCombatPhase!=='bossIntro')this.clearCombat();
+      if(s.phase!=='bossIntro'&&this.introPortal){this.disposeObject(this.introPortal);this.introPortal=null;}
+      this.lastCombatPhase=s.phase;
+    }
     if(this.bossMesh && !s?.boss) {
       this.burst(this.bossMesh.position,STAGES[(s?.sector||1)-1].accent,75);
       this.disposeObject(this.bossMesh);this.bossMesh=null;
@@ -487,6 +430,11 @@ export class FlightView {
     }
     const speed = playing ? STAGES[s.sector-1].speed * (s.boostTime>0 ? 2 : 1) : 20;
     this.grid.position.z = -110 + ((this.elapsed * speed) % 5);
+    if(this.stageScenery)for(const motif of this.stageScenery.children) {
+      if(!motif.userData.scroll)continue;
+      motif.position.z+=dt*speed;
+      if(motif.position.z>35)motif.position.z-=315;
+    }
     for (const t of this.towers) {
       t.position.z += dt * speed;
       if (t.position.z > 30) t.position.z = -280;
@@ -530,7 +478,7 @@ export class FlightView {
       this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, pose.fov, dt * 5);
       this.camera.updateProjectionMatrix();
       this.shot -= dt;
-      if (this.shot <= 0 && s.phase !== "transition") {
+      if (this.shot <= 0 && (s.phase === "wave" || s.phase === "boss")) {
         for (const x of [-0.8, 0.8]) this.projectile(s.x + x, s.y, 0);
         this.shot = s.boostTime > 0 ? 0.045 : 0.085;
         this.audio.play("shot");
@@ -545,17 +493,35 @@ export class FlightView {
       if (s.boss && !this.bossMesh) this.makeBoss(s.sector);
       if (this.bossMesh) {
         const b = this.bossMesh;
-        b.position.x = Math.sin(this.elapsed * (0.8+s.sector*.1)) * 6;
-        b.position.y = 4 + Math.sin(this.elapsed * (0.9+s.sector*.12)) * 2;
-        b.position.z = THREE.MathUtils.lerp(b.position.z, -42, dt * 0.7);
-        b.rotation.z = Math.sin(this.elapsed) * 0.1;
-        this.bossShot -= dt;
-        if (this.bossShot <= 0) {
-          const patterns = [[-2,0,2],[-3,-1,1,3],[-4,0,4],[-4,-2,0,2,4],[-5,-2.5,0,2.5,5]];
-          for(const x of patterns[s.sector-1]) this.projectile(s.x+x, s.y, -40, true);
-          if(s.sector>=3) for(const y of [-1.8,1.8]) this.projectile(s.x,s.y+y,-40,true);
-          this.bossShot = 1.2-s.sector*.1;
+        if(s.phase==='bossIntro') {
+          const p=1-s.introTime/BOSS_INTRO_DURATION,ease=1-Math.pow(1-p,3);
+          const arrival=bossPose(s.sector,0);
+          b.position.set(arrival.x*ease+Math.sin(p*Math.PI*2)*5*(1-p),4+(arrival.y-4)*ease+Math.sin(p*Math.PI)*3,-140+(140+arrival.z)*ease);
+          b.rotation.set(0,(1-p)*Math.PI*1.3,(1-p)*-.45);
+          if(this.introPortal){
+            this.introPortal.rotation.z+=dt*(this.reduced?.1:.45);
+            this.introPortal.scale.setScalar(.7+p*.5);
+            this.introPortal.children.forEach(r=>r.material.opacity=Math.sin(p*Math.PI)*(this.reduced?.28:.7));
+          }
+        } else {
+          const pose=bossPose(s.sector,s.bossTime||0);
+          b.position.set(pose.x,pose.y,pose.z);
+          b.rotation.set(.12*Math.sin((s.bossTime||0)*.8),-.14*Math.cos((s.bossTime||0)*.7),pose.roll);
+          this.bossShot-=dt;
+          // Shots originate at visible cannons, aimed at where the player was, never spawned next to them.
+          if(this.bossShot<=0) {
+            const spread=s.sector>=4?[-1,0,1]:[-1,1];
+            for(const side of spread){
+              this.projectile(b.position.x+side*2,b.position.y,b.position.z+2,true);
+              const bullet=this.bullets[this.bullets.length-1];
+              const dz=3-bullet.mesh.position.z,flight=dz/bullet.speed;
+              bullet.vx=(s.x+side*1.4-bullet.mesh.position.x)/flight;
+              bullet.vy=(s.y-bullet.mesh.position.y)/flight;
+            }
+            this.bossShot=1.35-s.sector*.09;
+          }
         }
+        animateStageBoss(b,s.sector,s.bossTime||this.elapsed);
       }
       for (let i = this.entities.length - 1; i >= 0; i--) {
         const e = this.entities[i],
@@ -563,8 +529,11 @@ export class FlightView {
         e.previousZ = p.z;
         p.z += dt * (e.speed + (s.boostTime > 0 ? 20 : 0));
         if (e.kind === "drone") {
-          p.x = e.baseX + Math.sin(this.elapsed * 2 + e.phase) * 1.2;
-          e.mesh.rotation.z = Math.sin(this.elapsed * 3 + e.phase) * 0.25;
+          const t=this.elapsed+e.phase;
+          p.x=e.baseX+Math.sin(t*(1.3+e.stage*.25))*(e.stage===4?2:1.2);
+          p.y=e.baseY+Math.sin(t*(e.stage===3?2:1.2))*.45;
+          e.mesh.rotation.z=e.stage===3?t*.7:Math.sin(t*2)*.3;
+          if(e.stage===4)e.mesh.children.forEach((part,j)=>{part.rotation.y=Math.sin(t*3-j*.5)*.18;});
         } else e.mesh.rotation.y += dt;
         if (
           p.z > 1 &&
@@ -590,6 +559,7 @@ export class FlightView {
           p = b.mesh.position,
           previousZ = p.z;
         p.z += dt * b.speed;
+        p.x += dt*(b.vx||0);p.y += dt*(b.vy||0);
         let dead = p.z < -150 || p.z > 22;
         if (b.hostile) {
           if (
@@ -607,7 +577,7 @@ export class FlightView {
           }
         } else {
           if (
-            this.bossMesh &&
+            s.phase === "boss" && this.bossMesh &&
             crossesDepth(
               previousZ,
               p.z,

@@ -35,6 +35,10 @@ export class AudioFX {
       this.lastShot = performance.now();
       this.tone(700, 0.07, "triangle", 0.025, -450);
     }
+    if (name === "warning") {
+      this.tone(75,1.5,"sawtooth",.04,180);
+      this.tone(330,.9,"triangle",.06,-110);
+    }
     if (name === "hit") this.tone(110, 0.22, "sawtooth", 0.05, -75);
     if (name === "kill") {
       this.tone(280, 0.12, "square", 0.035, -200);

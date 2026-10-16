@@ -1,5 +1,5 @@
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const STAGE_DURATION = 11, TRANSITION_DURATION = 2, HIT_DAMAGE = 20;
+export const STAGE_DURATION = 11, TRANSITION_DURATION = 2, BOSS_INTRO_DURATION = 3, HIT_DAMAGE = 20;
 export const STAGES = [
   {name:'NEON COAST',boss:'PRISM SENTINEL',sky:0x080c22,floor:0x080f23,accent:0x66fff1,sun:0xff6a80,speed:48,hp:65},
   {name:'EMBER CANYON',boss:'INFERNO RAM',sky:0x250c13,floor:0x32140c,accent:0xffa240,sun:0xff4224,speed:55,hp:80},
@@ -11,7 +11,7 @@ export const hitsRemaining = s => Math.ceil(s.health / HIT_DAMAGE);
 export const hitsLabel = s => `${hitsRemaining(s)} HIT${hitsRemaining(s)===1?'':'S'} LEFT`;
 export function createGame() {
  return {status:'playing',x:0,y:3,health:100,score:0,combo:0,maxCombo:0,time:0,sector:1,
- stageTime:0,phase:'wave',transitionTime:0,invincible:0,boostTime:0,boostCharge:1,
+ stageTime:0,phase:'wave',transitionTime:0,introTime:0,bossTime:0,invincible:0,boostTime:0,boostCharge:1,
  boss:false,bossHealth:STAGES[0].hp,bossMax:STAGES[0].hp,kills:0};
 }
 export function step(s,dt,input={}) {
@@ -30,18 +30,24 @@ export function step(s,dt,input={}) {
    }
    return;
  }
+ if(s.phase==='bossIntro'){
+   s.introTime=Math.max(0,s.introTime-dt);
+   if(s.introTime===0){s.phase='boss';s.bossTime=0;}
+   return;
+ }
+ if(s.phase==='boss')s.bossTime+=dt;
  if(s.phase==='wave') {
    s.stageTime+=dt;
-   if(s.stageTime>=STAGE_DURATION){s.boss=true;s.phase='boss';}
+   if(s.stageTime>=STAGE_DURATION){s.boss=true;s.phase='bossIntro';s.introTime=BOSS_INTRO_DURATION;s.bossTime=0;}
  }
 }
 export function damage(s) {
- if(s.status!=='playing'||s.phase==='transition'||s.invincible>0||s.boostTime>0)return false;
+ if(s.status!=='playing'||(s.phase==='transition'||s.phase==='bossIntro')||s.invincible>0||s.boostTime>0)return false;
  s.health=Math.max(0,s.health-HIT_DAMAGE);s.invincible=1.4;s.combo=0;
  if(!s.health)s.status='lost';return true;
 }
 export function boost(s) {
- if(s.status!=='playing'||s.phase==='transition'||s.boostCharge<1)return false;
+ if(s.status!=='playing'||(s.phase==='transition'||s.phase==='bossIntro')||s.boostCharge<1)return false;
  s.boostCharge=0;s.boostTime=1.8;return true;
 }
 export function hit(s,points=100) {
@@ -50,7 +56,7 @@ export function hit(s,points=100) {
  s.score+=points*Math.min(5,1+Math.floor(s.combo/5));
 }
 export function hitBoss(s,amount) {
- if(!s.boss||s.status!=='playing')return;
+ if(!s.boss||s.phase!=='boss'||s.status!=='playing')return;
  s.bossHealth=Math.max(0,s.bossHealth-amount);
  if(!s.bossHealth) {
    s.score+=5000*s.sector;s.boss=false;

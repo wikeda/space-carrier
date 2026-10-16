@@ -79,6 +79,11 @@ test('five distinct stages each render a boss and campaign win persists',async({
       s.invincible=1000;
       while(s.phase==='wave')g.step(s,.05);
     });
+    await expect.poll(()=>page.evaluate(()=>window.__fixture.state().phase)).toBe('bossIntro');
+    await expect(page.locator('body')).toHaveClass(/boss-intro/);
+    await page.waitForTimeout(850);
+    await page.screenshot({path:info.outputPath(`stage-${stage}-entrance.png`)});
+    await page.evaluate(async()=>{const g=await import('/src/game.js'),s=window.__fixture.state();while(s.phase==='bossIntro')g.step(s,.05);});
     await expect(page.locator('#boss-bar')).toBeVisible();
     bosses.push(await page.locator('#boss-name').textContent());
     await expect.poll(()=>page.evaluate(()=>!!window.__fixture.view().bossMesh)).toBe(true);
@@ -117,13 +122,13 @@ test('armored enemy, thick lasers and real kill shockwave render',async({page},i
     const v=window.__fixture.view(),s=window.__fixture.state();
     const original=Math.random;Math.random=()=>.8;
     try{v.enemy(s);}finally{Math.random=original;}
-    const enemy=v.entities.at(-1);enemy.mesh.position.set(0,3,-12);enemy.baseX=0;enemy.phase=-v.elapsed*2;enemy.speed=0;enemy.hp=1;
+    const enemy=v.entities.at(-1);enemy.mesh.position.set(0,3,-12);enemy.baseX=0;enemy.baseY=3;enemy.phase=-v.elapsed;enemy.speed=0;enemy.hp=1;
     v.projectile(0,3,-5,false);const laser=v.bullets.at(-1);
     s.status='paused';
     v.renderer.render(v.scene,v.camera);
-    return {parts:enemy.mesh.children.map(c=>c.name),width:laser.mesh.geometry.parameters.width,sleeve:laser.mesh.children[0].geometry.parameters.width};
+    return {model:enemy.mesh.userData.modelType,parts:enemy.mesh.children.map(c=>c.name),width:laser.mesh.geometry.parameters.width,sleeve:laser.mesh.children[0].geometry.parameters.width};
   });
-  expect(geometry.parts).toEqual(expect.arrayContaining(['armored-hull','wing-left','wing-right','engine-left','engine-right']));
+  expect(geometry.model).toBeTruthy();expect(geometry.parts.length).toBeGreaterThan(2);
   expect(geometry.width).toBeGreaterThanOrEqual(.2);expect(geometry.sleeve).toBeGreaterThanOrEqual(.4);
   await page.screenshot({path:info.outputPath('fighter-thick-laser.png')});
   const effect=await page.evaluate(()=>{
@@ -135,5 +140,57 @@ test('armored enemy, thick lasers and real kill shockwave render',async({page},i
   await page.screenshot({path:info.outputPath('kill-shockwave.png')});
   await page.evaluate(()=>{const v=window.__fixture.view(),s=window.__fixture.state();s.status='playing';v.tick(.12,s,true);s.status='paused';});
   await page.screenshot({path:info.outputPath('kill-shockwave-expanded.png')});
+  expect(errors).toEqual([]);
+});
+test('five worlds and five enemy silhouettes have distinct geometry',async({page},info)=>{
+  const errors=await boot(page),worlds=[],models=[],shapes=[];
+  for(let stage=1;stage<=5;stage++){
+    const result=await page.evaluate(stage=>{
+      const v=window.__fixture.view(),s=window.__fixture.state();
+      s.sector=stage;s.phase='wave';s.boss=false;s.stageTime=0;s.status='paused';
+      v.setStage(stage);
+      for(const e of v.entities)v.disposeObject(e.mesh);v.entities=[];
+      v.enemy(s);const e=v.entities.at(-1);
+      e.mesh.position.set(0,3,-12);e.baseX=0;e.baseY=3;e.speed=0;
+      v.renderer.render(v.scene,v.camera);
+      const geometry=[];v.stageScenery.traverse(o=>{if(o.geometry)geometry.push(o.geometry.type);});
+      return {world:v.stageScenery.userData.theme,model:e.mesh.userData.modelType,geometry:geometry.sort().join(',')};
+    },stage);
+    worlds.push(result.world);models.push(result.model);shapes.push(result.geometry);
+    expect(result.geometry.length).toBeGreaterThan(0);
+    await page.screenshot({path:info.outputPath(`stage-${stage}-world-enemy.png`)});
+  }
+  expect(worlds.every(Boolean)).toBe(true);expect(models.every(Boolean)).toBe(true);
+  expect(new Set(worlds).size).toBe(5);expect(new Set(models).size).toBe(5);
+  expect(new Set(shapes).size).toBe(5);
+  expect(errors).toEqual([]);
+});
+test('boss entrance clears fodder and is safe; active boss moves without fodder',async({page},info)=>{
+  const errors=await boot(page);
+  const entrance=await page.evaluate(async()=>{
+    const g=await import('/src/game.js'),s=window.__fixture.state(),v=window.__fixture.view();
+    v.enemy(s);v.projectile(s.x,s.y,2,true);
+    const oldEnemies=v.entities.length;
+    while(s.phase==='wave')g.step(s,.05);
+    s.invincible=0;s.boostTime=0;const health=s.health,bossHealth=s.bossHealth;
+    g.damage(s);g.hitBoss(s,99999);
+    v.tick(.01,s,true);s.status='paused';
+    return {oldEnemies,phase:s.phase,health:s.health,bossHealth:s.bossHealth,originalHealth:health,originalBossHealth:bossHealth,entities:v.entities.length,hostile:v.bullets.filter(b=>b.hostile).length};
+  });
+  expect(entrance.oldEnemies).toBeGreaterThan(0);expect(entrance.phase).toBe('bossIntro');
+  expect(entrance.health).toBe(entrance.originalHealth);expect(entrance.bossHealth).toBe(entrance.originalBossHealth);
+  expect(entrance.entities).toBe(0);expect(entrance.hostile).toBe(0);
+  await page.screenshot({path:info.outputPath('safe-boss-entrance.png')});
+  const fight=await page.evaluate(async()=>{
+    const g=await import('/src/game.js'),s=window.__fixture.state(),v=window.__fixture.view();
+    s.status='playing';while(s.phase==='bossIntro')g.step(s,.05);s.invincible=1000;
+    const poses=[],counts=[];
+    for(let i=0;i<100;i++){g.step(s,.05);v.tick(.05,s,true);counts.push(v.entities.length);if(i%10===0)poses.push(v.bossMesh.position.toArray());}
+    s.status='paused';return{phase:s.phase,counts,poses};
+  });
+  expect(fight.phase).toBe('boss');expect(fight.counts.every(n=>n===0)).toBe(true);
+  expect(new Set(fight.poses.map(p=>p.map(n=>n.toFixed(2)).join(','))).size).toBeGreaterThan(5);
+  const xs=fight.poses.map(p=>p[0]);expect(Math.max(...xs)-Math.min(...xs)).toBeGreaterThan(2);
+  await page.screenshot({path:info.outputPath('boss-active-no-fodder.png')});
   expect(errors).toEqual([]);
 });

@@ -47,6 +47,7 @@ function announce(text) {
 }
 function clearDamageFeedback() {
   damageTimer = 0;
+  document.body.classList.remove("boss-intro");
   $("damage-alert").textContent = "";
   $("damage-alert").classList.remove("visible");
   $("flash").style.opacity = "0";
@@ -242,8 +243,9 @@ function frame(now) {
       );
     }
     if (state.phase !== lastPhase) {
-      if(state.phase === "boss") announce(`WARNING // ${STAGES[state.sector-1].boss}`);
+      if(state.phase === "bossIntro") announce(`WARNING // ${STAGES[state.sector-1].boss}`);
       if(state.phase === "transition") { announce(`STAGE ${state.sector} CLEAR! +${state.sector*5000}`); audio.play("win"); }
+      document.body.classList.toggle("boss-intro",state.phase === "bossIntro");
       lastPhase = state.phase;
     }
   }
@@ -252,7 +254,7 @@ function frame(now) {
     $("score").textContent = fmt(state.score);
     $("sector").textContent = `STAGE 0${state.sector} / 05`;
     $("sector-name").textContent = STAGES[state.sector-1].name;
-    $("boss-name").textContent = `BOSS ${state.sector} // ${STAGES[state.sector-1].boss}`;
+    $("boss-name").textContent = `${state.phase === "bossIntro" ? "INCOMING" : "BOSS"} ${state.sector} // ${STAGES[state.sector-1].boss}`;
     $("hits-remaining").textContent = hitsLabel(state);
     $("hits-remaining").classList.toggle("critical", hitsRemaining(state)<=2);
     $("health").style.width = state.health + "%";

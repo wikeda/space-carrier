@@ -819,3 +819,8 @@ body.reduced .vignette {
 @media(max-width:700px) { #hits-remaining {top:103px;left:20px;font-size:12px;} #boss-bar {top:145px;} }
 #announcement { padding:0 5%; overflow-wrap:anywhere; line-height:1.22; }
 @media(max-width:700px) { #announcement {font-size:clamp(18px,4.5vw,28px);letter-spacing:1.5px;top:28%;} #damage-alert {top:39%;font-size:clamp(19px,5vw,28px);} }
+
+/* One continuous entrance treatment, never a repeating strobe. */
+body.boss-intro #announcement {color:#ffe08c;letter-spacing:.12em;text-shadow:0 0 22px #ff6339;transform:scale(1.03);}
+body.boss-intro #scene:after {content:"";position:absolute;inset:0;pointer-events:none;border-top:clamp(18px,5vh,44px) solid #060912cc;border-bottom:clamp(18px,5vh,44px) solid #060912cc;box-shadow:inset 0 0 100px #e957253d;}
+body.reduced.boss-intro #announcement {transform:none;text-shadow:none;}
