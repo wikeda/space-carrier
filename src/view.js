@@ -1,0 +1,617 @@
+import * as THREE from "../vendor/three.module.js";
+import { damage, hit, hitBoss } from "./game.js";
+import { cameraPose } from "./camera.js";
+import { crossesDepth } from "./collision.js";
+const CYAN = 0x66fff1,
+  PINK = 0xff397c;
+export class FlightView {
+  constructor(host, audio) {
+    this.audio = audio;
+    this.reduced = false;
+    this.elapsed = 0;
+    this.shot = 0;
+    this.spawn = 0;
+    this.entities = [];
+    this.bullets = [];
+    this.particles = [];
+    this.bossMesh = null;
+    this.bossShot = 0;
+    this.shake = 0;
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x080c22);
+    this.scene.fog = new THREE.FogExp2(0x080c22, 0.009);
+    this.camera = new THREE.PerspectiveCamera(58, 1, 0.1, 400);
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: "high-performance",
+    });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    host.appendChild(this.renderer.domElement);
+    this.scene.add(new THREE.HemisphereLight(0x96dfff, 0x24103c, 2.8));
+    const light = new THREE.DirectionalLight(0xb0fff4, 3.5);
+    light.position.set(-4, 12, 8);
+    this.scene.add(light);
+    const rim = new THREE.DirectionalLight(PINK, 3);
+    rim.position.set(3, 5, -10);
+    this.scene.add(rim);
+    this.materials = {
+      body: new THREE.MeshStandardMaterial({
+        color: 0xc5ecf5,
+        metalness: 0.6,
+        roughness: 0.27,
+      }),
+      dark: new THREE.MeshStandardMaterial({
+        color: 0x071025,
+        metalness: 0.7,
+        roughness: 0.24,
+      }),
+      glass: new THREE.MeshStandardMaterial({
+        color: 0x18314e,
+        metalness: 0.85,
+        roughness: 0.13,
+        emissive: 0x072341,
+      }),
+      pink: new THREE.MeshBasicMaterial({ color: PINK }),
+      cyan: new THREE.MeshBasicMaterial({ color: CYAN }),
+      wheel: new THREE.MeshStandardMaterial({
+        color: 0x111422,
+        roughness: 0.8,
+      }),
+    };
+    this.glowTexture = this.makeGlow();
+    this.car = this.makeCar();
+    this.scene.add(this.car);
+    this.makeWorld();
+    this.resize();
+  }
+  makeGlow() {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const ctx = c.getContext("2d"),
+      g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(0.15, "rgba(255,255,255,.6)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  }
+  glow(color, size) {
+    const m = new THREE.SpriteMaterial({
+      map: this.glowTexture,
+      color,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const s = new THREE.Sprite(m);
+    s.scale.set(size, size, 1);
+    return s;
+  }
+  box(w, h, d, mat, x = 0, y = 0, z = 0) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    mesh.position.set(x, y, z);
+    return mesh;
+  }
+  makeCar() {
+    const g = new THREE.Group(),
+      m = this.materials;
+    g.add(this.box(2.5, 0.42, 4.2, m.body, 0, 0, 0));
+    g.add(this.box(2.65, 0.22, 3.7, m.dark, 0, -0.25, 0.05));
+    g.add(this.box(1.9, 0.55, 1.7, m.glass, 0, 0.46, 0.1));
+    g.add(this.box(1.7, 0.09, 1.15, m.body, 0, 0.78, 0.15));
+    g.add(this.box(2.25, 0.14, 1.1, m.body, 0, 0.2, -1.43));
+    g.add(this.box(2.45, 0.12, 0.75, m.body, 0, 0.19, 1.7));
+    for (const x of [-1.26, 1.26])
+      for (const z of [-1.2, 1.35]) {
+        const wheel = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.46, 0.46, 0.3, 16),
+          m.wheel,
+        );
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(x, -0.24, z);
+        g.add(wheel);
+        const hub = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.25, 0.25, 0.32, 12),
+          m.cyan,
+        );
+        hub.rotation.z = Math.PI / 2;
+        hub.position.copy(wheel.position);
+        g.add(hub);
+      }
+    for (const x of [-0.85, 0.85]) {
+      g.add(this.box(0.09, 0.52, 0.12, m.dark, x, 0.48, 1.65));
+      g.add(this.box(0.55, 0.12, 0.08, m.pink, x, 0.1, 2.14));
+      g.add(this.box(0.55, 0.1, 0.08, m.cyan, x, 0.12, -2.14));
+      const glow = this.glow(CYAN, 2.1);
+      glow.position.set(x, -0.28, 2.3);
+      g.add(glow);
+    }
+    g.add(this.box(2.85, 0.12, 0.52, m.dark, 0, 0.78, 1.7));
+    g.add(this.box(2.8, 0.035, 0.08, m.pink, 0, 0.86, 1.93));
+    g.add(this.box(0.09, 0.025, 3.7, m.cyan, 0, 0.235, 0));
+    g.add(this.box(2.4, 0.025, 0.07, m.cyan, 0, -0.33, 2.1));
+    this.exhaust = [];
+    for (const x of [-0.8, 0.8]) {
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1.9, 10), m.cyan);
+      f.rotation.x = Math.PI / 2;
+      f.position.set(x, -0.16, 2.85);
+      g.add(f);
+      this.exhaust.push(f);
+    }
+    return g;
+  }
+  makeWorld() {
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(600, 600),
+      new THREE.MeshStandardMaterial({
+        color: 0x080f23,
+        metalness: 0.55,
+        roughness: 0.28,
+      }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, -0.7, -120);
+    this.scene.add(floor);
+    this.grid = new THREE.GridHelper(500, 100, 0x1d5169, 0x16334f);
+    this.grid.position.set(0, -0.65, -110);
+    this.scene.add(this.grid);
+    this.road = [];
+    for (const x of [-12, 12]) {
+      const l = this.box(0.12, 0.04, 320, this.materials.cyan, x, -0.5, -140);
+      this.scene.add(l);
+    }
+    for (let i = 0; i < 30; i++) {
+      const l = this.box(
+        0.12,
+        0.05,
+        3,
+        new THREE.MeshBasicMaterial({ color: 0x417e92 }),
+        0,
+        -0.52,
+        -i * 10,
+      );
+      this.scene.add(l);
+      this.road.push(l);
+    }
+    this.towers = [];
+    for (let i = 0; i < 70; i++) {
+      const h = 3 + Math.random() * 30,
+        w = 2 + Math.random() * 5,
+        x = (16 + Math.random() * 60) * (i % 2 ? 1 : -1),
+        z = -Math.random() * 280;
+      const g = new THREE.Group(),
+        geo = new THREE.BoxGeometry(w, h, w),
+        mat = new THREE.MeshStandardMaterial({
+          color: i % 3 ? 0x10182f : 0x162143,
+          metalness: 0.4,
+          roughness: 0.6,
+        });
+      const b = new THREE.Mesh(geo, mat);
+      b.position.y = h / 2 - 1;
+      g.add(b);
+      const wire = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({
+          color: i % 3 ? 0x195677 : 0x663a79,
+          transparent: true,
+          opacity: 0.65,
+        }),
+      );
+      wire.position.copy(b.position);
+      g.add(wire);
+      g.position.set(x, 0, z);
+      this.scene.add(g);
+      this.towers.push(g);
+    }
+    const sun = new THREE.Group();
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xff6a80 });
+    for (let i = 0; i < 10; i++) {
+      const y = -14 + i * 3.1,
+        r = 23,
+        half = Math.sqrt(Math.max(0, r * r - y * y));
+      sun.add(this.box(half * 2, i < 4 ? 1.6 : 2.8, 0.1, sunMat, 0, y, 0));
+    }
+    sun.position.set(2, 35, -230);
+    this.scene.add(sun);
+    const halo = this.glow(0xff4269, 125);
+    halo.position.set(2, 35, -231);
+    this.scene.add(halo);
+    const stars = new Float32Array(450 * 3);
+    for (let i = 0; i < 450; i++) {
+      stars[i * 3] = (Math.random() - 0.5) * 350;
+      stars[i * 3 + 1] = 15 + Math.random() * 130;
+      stars[i * 3 + 2] = -30 - Math.random() * 250;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(stars, 3));
+    this.scene.add(
+      new THREE.Points(
+        geo,
+        new THREE.PointsMaterial({
+          color: 0x9daed6,
+          size: 0.3,
+          transparent: true,
+          opacity: 0.75,
+        }),
+      ),
+    );
+    this.speedLines = [];
+    for (let i = 0; i < 38; i++) {
+      const l = this.box(
+        0.025,
+        0.025,
+        2 + Math.random() * 5,
+        new THREE.MeshBasicMaterial({
+          color: i % 3 ? CYAN : PINK,
+          transparent: true,
+          opacity: 0.35,
+        }),
+        (Math.random() - 0.5) * 35,
+        1 + Math.random() * 16,
+        -Math.random() * 140,
+      );
+      this.scene.add(l);
+      this.speedLines.push(l);
+    }
+  }
+  resize() {
+    this.camera.aspect = innerWidth / innerHeight;
+    this.camera.fov = cameraPose(this.camera.aspect).fov;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(innerWidth, innerHeight);
+  }
+  setReduced(value) {
+    this.reduced = value;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, value ? 1 : 1.7));
+    this.resize();
+  }
+  disposeObject(obj) {
+    this.scene.remove(obj);
+    obj.traverse((n) => {
+      if (n.geometry) n.geometry.dispose();
+      if (n.material && !Object.values(this.materials).includes(n.material))
+        n.material.dispose();
+    });
+  }
+  reset() {
+    for (const list of [this.entities, this.bullets, this.particles]) {
+      for (const o of list) this.disposeObject(o.mesh);
+      list.length = 0;
+    }
+    if (this.bossMesh) {
+      this.disposeObject(this.bossMesh);
+      this.bossMesh = null;
+    }
+    this.shot = 0;
+    this.spawn = 0.8;
+    this.bossShot = 0;
+    this.shake = 0;
+  }
+  enemy(s) {
+    const kind = Math.random() < 0.22 ? "obstacle" : "drone",
+      g = new THREE.Group();
+    const x = (Math.random() - 0.5) * 17,
+      y = 1.3 + Math.random() * 5.5;
+    if (kind === "drone") {
+      const core = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.8),
+        new THREE.MeshStandardMaterial({
+          color: 0x7b224e,
+          emissive: 0xff215e,
+          emissiveIntensity: 0.6,
+          metalness: 0.7,
+          roughness: 0.3,
+        }),
+      );
+      g.add(core);
+      g.add(this.box(3, 0.15, 0.6, this.materials.dark));
+      g.add(this.box(3.3, 0.07, 0.13, this.materials.pink, 0, 0, 0.4));
+      const glow = this.glow(PINK, 3);
+      g.add(glow);
+    } else {
+      g.add(
+        this.box(
+          1.3,
+          3.5,
+          1.3,
+          new THREE.MeshStandardMaterial({
+            color: 0x292e58,
+            emissive: 0x522263,
+            emissiveIntensity: 0.4,
+          }),
+        ),
+      );
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(1.15, 0.055, 6, 16),
+        this.materials.pink,
+      );
+      g.add(ring);
+    }
+    g.position.set(x, y, -120);
+    this.scene.add(g);
+    this.entities.push({
+      mesh: g,
+      kind,
+      hp: kind === "drone" ? 2 : 5,
+      r: kind === "drone" ? 1.3 : 1.25,
+      speed: kind === "drone" ? 27 + s.sector * 3 : 24,
+      baseX: x,
+      phase: Math.random() * 6,
+    });
+  }
+  projectile(x, y, z, hostile = false) {
+    const mesh = this.box(
+      hostile ? 0.22 : 0.08,
+      hostile ? 0.22 : 0.08,
+      hostile ? 0.7 : 2,
+      hostile ? this.materials.pink : this.materials.cyan,
+      x,
+      y,
+      z,
+    );
+    this.scene.add(mesh);
+    this.bullets.push({ mesh, hostile, speed: hostile ? 37 : -110 });
+  }
+  burst(pos, color, count = 18) {
+    for (let i = 0; i < (this.reduced ? 6 : count); i++) {
+      const mesh = this.box(
+        0.11,
+        0.11,
+        0.5,
+        new THREE.MeshBasicMaterial({ color, transparent: true }),
+      );
+      mesh.position.copy(pos);
+      mesh.rotation.set(Math.random() * 6, Math.random() * 6, 0);
+      this.scene.add(mesh);
+      this.particles.push({
+        mesh,
+        v: new THREE.Vector3(
+          (Math.random() - 0.5) * 15,
+          (Math.random() - 0.25) * 12,
+          (Math.random() - 0.5) * 20,
+        ),
+        life: 0.45 + Math.random() * 0.4,
+      });
+    }
+    this.shake = this.reduced ? 0 : 0.18;
+  }
+  makeBoss() {
+    const g = new THREE.Group();
+    g.add(this.box(7, 1.2, 3, this.materials.dark));
+    g.add(this.box(3, 2.6, 3, this.materials.dark));
+    g.add(this.box(6, 0.12, 0.1, this.materials.pink, 0, 0, 1.6));
+    const core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(1.2, 1),
+      new THREE.MeshStandardMaterial({
+        color: 0xff89b7,
+        emissive: 0xff1264,
+        emissiveIntensity: 2,
+      }),
+    );
+    core.position.set(0, 0, 1.6);
+    g.add(core);
+    for (const x of [-4.5, 4.5]) {
+      g.add(this.box(2.3, 2, 0.8, this.materials.dark, x, 0, 0));
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(1.1, 0.09, 8, 20),
+        this.materials.pink,
+      );
+      ring.position.set(x, 0, 0.6);
+      g.add(ring);
+    }
+    const glow = this.glow(PINK, 10);
+    glow.position.z = 1;
+    g.add(glow);
+    g.position.set(0, 4, -65);
+    this.scene.add(g);
+    this.bossMesh = g;
+  }
+  tick(dt, s, playing) {
+    if (!playing && s?.status === "paused") {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+    this.elapsed += dt;
+    const speed = playing ? (s.boostTime > 0 ? 65 : 26) : 14;
+    this.grid.position.z = -110 + ((this.elapsed * speed) % 5);
+    for (const t of this.towers) {
+      t.position.z += dt * speed;
+      if (t.position.z > 30) t.position.z = -280;
+    }
+    for (const r of this.road) {
+      r.position.z += dt * speed;
+      if (r.position.z > 20) r.position.z = -280;
+    }
+    for (const l of this.speedLines) {
+      l.visible = !this.reduced;
+      l.position.z += dt * (speed + 20);
+      if (l.position.z > 20) l.position.z = -140;
+      l.scale.z = s?.boostTime > 0 ? 3 : 1;
+    }
+    if (playing) {
+      this.car.position.lerp(
+        new THREE.Vector3(s.x, s.y, 3),
+        1 - Math.exp(-dt * 15),
+      );
+      this.car.rotation.z = THREE.MathUtils.lerp(
+        this.car.rotation.z,
+        (this.car.position.x - s.x) * 0.18,
+        dt * 12,
+      );
+      this.car.rotation.y = THREE.MathUtils.lerp(
+        this.car.rotation.y,
+        (this.car.position.x - s.x) * 0.08,
+        dt * 10,
+      );
+      this.car.rotation.x = THREE.MathUtils.lerp(
+        this.car.rotation.x,
+        (s.y - this.car.position.y) * 0.08,
+        dt * 10,
+      );
+      this.car.visible =
+        s.invincible <= 0 || Math.floor(s.invincible * 12) % 2 === 0;
+      const pose = cameraPose(this.camera.aspect, s.boostTime > 0);
+      this.camera.position.set(s.x * 0.16, 6.2 + s.y * 0.12, pose.z);
+      this.camera.lookAt(s.x * 0.28, 3.4, -35);
+      this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, pose.fov, dt * 5);
+      this.camera.updateProjectionMatrix();
+      this.shot -= dt;
+      if (this.shot <= 0) {
+        for (const x of [-0.8, 0.8]) this.projectile(s.x + x, s.y, 0);
+        this.shot = s.boostTime > 0 ? 0.075 : 0.16;
+        this.audio.play("shot");
+      }
+      if (!s.boss) {
+        this.spawn -= dt;
+        if (this.spawn <= 0) {
+          this.enemy(s);
+          this.spawn = 0.75 - s.sector * 0.12;
+        }
+      }
+      if (s.boss && !this.bossMesh) this.makeBoss();
+      if (this.bossMesh) {
+        const b = this.bossMesh;
+        b.position.x = Math.sin(this.elapsed * 0.65) * 6;
+        b.position.y = 4 + Math.sin(this.elapsed * 0.9) * 2;
+        b.position.z = THREE.MathUtils.lerp(b.position.z, -42, dt * 0.7);
+        b.rotation.z = Math.sin(this.elapsed) * 0.1;
+        this.bossShot -= dt;
+        if (this.bossShot <= 0) {
+          for (const x of [-2, 0, 2]) this.projectile(s.x + x, s.y, -40, true);
+          this.bossShot = 1.2;
+        }
+      }
+      for (let i = this.entities.length - 1; i >= 0; i--) {
+        const e = this.entities[i],
+          p = e.mesh.position;
+        e.previousZ = p.z;
+        p.z += dt * (e.speed + (s.boostTime > 0 ? 20 : 0));
+        if (e.kind === "drone") {
+          p.x = e.baseX + Math.sin(this.elapsed * 2 + e.phase) * 1.2;
+          e.mesh.rotation.z = Math.sin(this.elapsed * 3 + e.phase) * 0.25;
+        } else e.mesh.rotation.y += dt;
+        if (
+          p.z > 1 &&
+          p.z < 6 &&
+          Math.abs(p.x - s.x) < e.r + 1 &&
+          Math.abs(p.y - s.y) < (e.kind === "obstacle" ? 2.1 : 1)
+        ) {
+          if (damage(s, 20)) {
+            this.audio.play("hit");
+            this.onDamage?.();
+          }
+          this.burst(p, PINK, 12);
+          this.disposeObject(e.mesh);
+          this.entities.splice(i, 1);
+        } else if (p.z > 20) {
+          this.disposeObject(e.mesh);
+          this.entities.splice(i, 1);
+        }
+      }
+      for (let i = this.bullets.length - 1; i >= 0; i--) {
+        const b = this.bullets[i],
+          p = b.mesh.position,
+          previousZ = p.z;
+        p.z += dt * b.speed;
+        let dead = p.z < -150 || p.z > 22;
+        if (b.hostile) {
+          if (
+            p.z > 1 &&
+            p.z < 6 &&
+            Math.abs(p.x - s.x) < 1.2 &&
+            Math.abs(p.y - s.y) < 0.9
+          ) {
+            if (damage(s, 12)) {
+              this.audio.play("hit");
+              this.onDamage?.();
+            }
+            dead = true;
+          }
+        } else {
+          if (
+            this.bossMesh &&
+            crossesDepth(
+              previousZ,
+              p.z,
+              this.bossMesh.position.z,
+              this.bossMesh.position.z,
+              2.6,
+            ) &&
+            Math.abs(p.x - this.bossMesh.position.x) < 4.5 &&
+            Math.abs(p.y - this.bossMesh.position.y) < 1.8
+          ) {
+            hitBoss(s, s.boostTime > 0 ? 2 : 1);
+            this.burst(p, CYAN, 3);
+            dead = true;
+            if (s.status === "won")
+              this.burst(this.bossMesh.position, PINK, 65);
+          }
+          if (!dead)
+            for (let j = this.entities.length - 1; j >= 0; j--) {
+              const e = this.entities[j],
+                q = e.mesh.position;
+              if (
+                crossesDepth(previousZ, p.z, e.previousZ ?? q.z, q.z, 2.2) &&
+                Math.abs(p.x - q.x) < e.r &&
+                Math.abs(p.y - q.y) < (e.kind === "obstacle" ? 1.8 : 1)
+              ) {
+                dead = true;
+                e.hp -= s.boostTime > 0 ? 3 : 1;
+                this.burst(p, CYAN, 3);
+                if (e.hp <= 0) {
+                  hit(s, e.kind === "drone" ? 100 : 150);
+                  this.audio.play("kill");
+                  this.burst(q, e.kind === "drone" ? PINK : CYAN);
+                  this.disposeObject(e.mesh);
+                  this.entities.splice(j, 1);
+                }
+                break;
+              }
+            }
+        }
+        if (dead) {
+          this.disposeObject(b.mesh);
+          this.bullets.splice(i, 1);
+        }
+      }
+    } else {
+      this.car.visible = true;
+      this.car.position.set(
+        innerWidth < 700 ? 3.2 : 4.5,
+        2.7 + Math.sin(this.elapsed) * 0.17,
+        3,
+      );
+      this.car.rotation.set(
+        0.03,
+        Math.sin(this.elapsed * 0.22) * 0.12 - 0.28,
+        -0.04,
+      );
+      this.camera.position.set(0, 6.5, 18);
+      this.camera.lookAt(0, 3, -20);
+      this.camera.fov = 58;
+      this.camera.updateProjectionMatrix();
+    }
+    for (const f of this.exhaust)
+      f.scale.y = (s?.boostTime > 0 ? 2.5 : 1) * (1 + Math.random() * 0.3);
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.life -= dt;
+      p.mesh.position.addScaledVector(p.v, dt);
+      p.mesh.material.opacity = Math.max(0, p.life * 1.5);
+      p.mesh.scale.multiplyScalar(1 + dt);
+      if (p.life <= 0) {
+        this.disposeObject(p.mesh);
+        this.particles.splice(i, 1);
+      }
+    }
+    if (this.shake > 0 && !this.reduced) {
+      this.shake -= dt;
+      this.camera.position.x += (Math.random() - 0.5) * this.shake;
+      this.camera.position.y += (Math.random() - 0.5) * this.shake;
+    }
+    this.renderer.render(this.scene, this.camera);
+  }
+}

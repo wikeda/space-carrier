@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#080c20" />
+    <meta
+      name="description"
+      content="空を駆けるネオン・カー。Three.jsによるオリジナル3Dアーケードシューティング。"
+    />
+    <title>NEON OVERDRIVE — 空を駆けろ。</title>
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="scene" aria-hidden="true"></div>
+    <div class="vignette"></div>
+    <div id="flash"></div>
+    <header id="topbar">
+      <a class="brand" href="./" aria-label="Neon Overdrive ホーム"
+        ><span class="brand-mark">N<span>↗</span></span
+        ><span>NEON<br /><b>OVERDRIVE</b></span></a
+      >
+      <div class="top-right">
+        <span class="live-dot"></span><span>ARCADE / 01</span
+        ><button
+          id="mute"
+          class="icon-button"
+          aria-label="サウンド切り替え"
+          title="サウンド"
+        >
+          ♪
+        </button>
+      </div>
+    </header>
+    <main id="menu" class="screen">
+      <div class="menu-copy">
+        <div class="eyebrow"><span></span> NO ROADS. NO LIMITS.</div>
+        <h1>NEON<br /><em>OVERDRIVE</em><span class="title-line"></span></h1>
+        <p class="tagline">道路なんて、いらない。</p>
+        <p class="description">
+          愛車で空へ。弾幕を抜け、限界を超えろ。<br />ネオンの彼方で、最高のランが待っている。
+        </p>
+        <div class="menu-actions">
+          <button id="start" class="primary">出撃する <span>↗</span></button
+          ><button id="history" class="secondary">記録 <span>↗</span></button>
+        </div>
+        <div class="control-note">
+          <span>DRAG / WASD</span> 移動 <i>·</i> 自動射撃 <i>·</i>
+          <span>SPACE</span> ブースト
+        </div>
+        <div class="record-strip">
+          <div>
+            <small>PERSONAL BEST</small><strong id="best">000000</strong>
+          </div>
+          <div>
+            <small>FLIGHT LOG</small
+            ><strong><span id="runs">00</span><sup> RUNS</sup></strong>
+          </div>
+        </div>
+      </div>
+      <div class="car-label">
+        <span>XR—01 / INTERCEPTOR</span
+        ><small>反重力ドライブ、オンライン。</small>
+      </div>
+      <footer class="menu-footer">
+        <span>3 SECTORS <i> / </i> 1 FINAL BOSS <i> / </i> FULL THROTTLE</span
+        ><label><input id="reduced" type="checkbox" /> 軽量エフェクト</label>
+      </footer>
+    </main>
+    <section id="hud" hidden aria-label="ゲーム状況">
+      <div class="hud-top">
+        <div><small>SCORE</small><strong id="score">000000</strong></div>
+        <div class="sector-box">
+          <small id="sector">SECTOR 01</small
+          ><span id="sector-name">NEON COAST</span>
+        </div>
+        <button id="pause" class="icon-button" aria-label="一時停止">Ⅱ</button>
+      </div>
+      <div class="health-row">
+        <small>HULL</small>
+        <div class="meter"><i id="health"></i></div>
+        <span id="health-number">100</span>
+      </div>
+      <div id="combo"></div>
+      <div id="boss-bar" hidden>
+        <small>WARNING // SENTINEL</small>
+        <div class="meter"><i id="boss-health"></i></div>
+      </div>
+      <div id="announcement"></div>
+      <div class="flight-bottom">
+        <span class="flight-tip">ドラッグで移動 · 自動射撃</span
+        ><button id="boost" class="boost">
+          <small>OVERDRIVE</small><b id="boost-label">BOOST ↗</b
+          ><span><i id="boost-meter"></i></span>
+        </button>
+      </div>
+      <div id="reticle">＋</div>
+    </section>
+    <section id="pause-screen" class="overlay" hidden>
+      <div class="panel">
+        <small class="eyebrow">TAKE A BREATH</small>
+        <h2>PAUSED<span>一時停止</span></h2>
+        <button id="resume" class="primary">飛行を再開 <span>↗</span></button
+        ><button id="quit" class="secondary">タイトルへ</button>
+        <p>画面を離れると自動で一時停止します。</p>
+      </div>
+    </section>
+    <section id="result-screen" class="overlay" hidden>
+      <div class="panel result-panel">
+        <small id="result-kicker" class="eyebrow">FLIGHT COMPLETE</small>
+        <h2 id="result-title">NICE RUN.</h2>
+        <p id="result-subtitle">もう一度、限界の向こうへ。</p>
+        <div class="result-score">
+          <small>FINAL SCORE</small><strong id="final-score">000000</strong
+          ><span id="new-best"></span>
+        </div>
+        <div class="result-stats">
+          <div><small>SECTOR</small><b id="final-sector"></b></div>
+          <div><small>MAX COMBO</small><b id="final-combo"></b></div>
+          <div><small>TIME</small><b id="final-time"></b></div>
+        </div>
+        <button id="restart" class="primary">
+          もう一度出撃 <span>↗</span></button
+        ><button id="home" class="secondary">タイトルへ</button>
+      </div>
+    </section>
+    <section id="history-screen" class="overlay" hidden>
+      <div class="panel history-panel">
+        <small class="eyebrow">YOUR FLIGHT LOG</small>
+        <h2>記録<span>直近20回のフライト</span></h2>
+        <div id="history-list"></div>
+        <button id="close-history" class="secondary">戻る</button>
+        <p>記録はこのブラウザー内に保存されます。</p>
+      </div>
+    </section>
+    <div id="storage-warning" hidden role="status">
+      保存が利用できません。記録はこの画面を閉じると失われます。
+    </div>
+    <div id="error" hidden role="alert">
+      <h2>エンジンを起動できませんでした</h2>
+      <p>WebGL対応のChrome / Safariで開き直してください。</p>
+      <button onclick="location.reload()">再読み込み</button>
+    </div>
+    <noscript>JavaScriptを有効にしてプレイしてください。</noscript>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
