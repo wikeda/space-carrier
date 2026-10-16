@@ -203,3 +203,8 @@ test("all five bosses arrive after roughly 11 seconds without changing their hea
   }
   assert.equal(s.status, "won");
 });
+
+test('remaining-hit labels use singular for the final hit',()=>{
+  assert.equal(game.hitsLabel({health:20}),'1 HIT LEFT');
+  assert.equal(game.hitsLabel({health:40}),'2 HITS LEFT');
+});

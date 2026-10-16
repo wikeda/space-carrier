@@ -1,4 +1,4 @@
-import { createGame, step, boost, clamp, STAGES, hitsRemaining } from "./game.js";
+import { createGame, step, boost, clamp, STAGES, hitsRemaining, hitsLabel } from "./game.js";
 import { load, save, record } from "./storage.js";
 import { FlightView } from "./view.js";
 import { AudioFX } from "./audio.js";
@@ -217,7 +217,7 @@ if (view)
     announcementTimer = 0;
     $("announcement").style.visibility = "hidden";
     $("announcement").style.opacity = "0";
-    $("damage-alert").textContent = remaining ? `HIT!  ${remaining} HITS LEFT` : "DESTROYED! GAME OVER";
+    $("damage-alert").textContent = remaining ? `HIT!  ${hitsLabel(state)}` : "DESTROYED! GAME OVER";
     $("damage-alert").classList.add("visible");
     $("flash").style.opacity = data.settings.reduced ? ".16" : ".72";
     damageTimer = 1.15;
@@ -253,7 +253,7 @@ function frame(now) {
     $("sector").textContent = `STAGE 0${state.sector} / 05`;
     $("sector-name").textContent = STAGES[state.sector-1].name;
     $("boss-name").textContent = `BOSS ${state.sector} // ${STAGES[state.sector-1].boss}`;
-    $("hits-remaining").textContent = `${hitsRemaining(state)} HITS LEFT`;
+    $("hits-remaining").textContent = hitsLabel(state);
     $("hits-remaining").classList.toggle("critical", hitsRemaining(state)<=2);
     $("health").style.width = state.health + "%";
     $("health").style.background = state.health < 35 ? "#ff4e8e" : "#76fff5";

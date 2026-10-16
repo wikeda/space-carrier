@@ -51,7 +51,7 @@ test('five real projectile collisions show damage and game over, save history',a
     await collide(page);
     await expect.poll(()=>page.evaluate(()=>window.__fixture.state().health)).toBe(remaining*20);
     if(remaining){
-      await expect(page.locator('#hits-remaining')).toContainText(String(remaining));
+      await expect(page.locator('#hits-remaining')).toHaveText(`${remaining} HIT${remaining===1?'':'S'} LEFT`);
       await expect(page.locator('#damage-alert')).toHaveClass(/visible/);
       await expect(page.locator('#damage-alert')).toContainText('HIT!');
       await expect(page.locator('#announcement')).toHaveCSS('visibility','hidden');
@@ -69,6 +69,7 @@ test('five real projectile collisions show damage and game over, save history',a
 });
 test('five distinct stages each render a boss and campaign win persists',async({page},info)=>{
   const errors=await boot(page);const names=[];const bosses=[];
+  expect(await page.evaluate(async()=>(await import('/src/game.js')).STAGE_DURATION)).toBe(11);
   for(let stage=1;stage<=5;stage++){
     await expect(page.locator('#sector')).toHaveText(`STAGE 0${stage} / 05`);
     names.push(await page.locator('#sector-name').textContent());

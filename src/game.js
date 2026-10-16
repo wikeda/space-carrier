@@ -8,6 +8,7 @@ export const STAGES = [
   {name:'SOLAR COLLAPSE',boss:'NOVA EMPEROR',sky:0x26091f,floor:0x271023,accent:0xffd45c,sun:0xff328f,speed:76,hp:140},
 ];
 export const hitsRemaining = s => Math.ceil(s.health / HIT_DAMAGE);
+export const hitsLabel = s => `${hitsRemaining(s)} HIT${hitsRemaining(s)===1?'':'S'} LEFT`;
 export function createGame() {
  return {status:'playing',x:0,y:3,health:100,score:0,combo:0,maxCombo:0,time:0,sector:1,
  stageTime:0,phase:'wave',transitionTime:0,invincible:0,boostTime:0,boostCharge:1,

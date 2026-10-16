@@ -336,6 +336,8 @@ export class FlightView {
         g.add(this.box(.12,.13,1,this.materials.pink,side*1.5,-.04,.65));
       }
       const glow=this.glow(accent,2.4);glow.position.z=-1.5;g.add(glow);
+      // Keep the visible fighter inside its existing collision envelope.
+      g.scale.x=.59;
     } else {
       g.add(
         this.box(
