@@ -12,6 +12,7 @@ async function boot(page) {
   await expect(page.locator('#error')).toBeHidden();
   await page.locator('#start').click();
   await expect(page.locator('#hud')).toBeVisible();
+  await expect.poll(()=>page.evaluate(()=>window.__fixture.state().time)).toBeGreaterThan(.12);
   return errors;
 }
 async function collide(page) {

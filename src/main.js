@@ -273,12 +273,6 @@ function frame(now) {
         ? "BOOST ↗"
         : `${Math.ceil((1 - state.boostCharge) * 6)}s RECHARGE`;
     $("boost").disabled = state.boostCharge < 1;
-    const carScreen = view?.car.position.clone().project(view.camera);
-    if (carScreen) {
-      $("reticle").style.left = (carScreen.x * 0.5 + 0.5) * 100 + "%";
-      $("reticle").style.top =
-        clamp((-carScreen.y * 0.5 + 0.5) * 100 - 16, 20, 75) + "%";
-    }
     if (state.status === "won" || state.status === "lost") finish();
   }
   if (damageTimer > 0 && playing) {
