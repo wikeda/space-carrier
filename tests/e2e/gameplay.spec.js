@@ -151,7 +151,8 @@ test('five worlds and five enemy silhouettes have distinct geometry',async({page
       v.setStage(stage);
       for(const e of v.entities)v.disposeObject(e.mesh);v.entities=[];
       const random=Math.random;Math.random=()=>.8;try{v.enemy(s);}finally{Math.random=random;}const e=v.entities.at(-1);
-      e.mesh.position.set(0,3,-12);e.baseX=0;e.baseY=3;e.speed=0;
+      e.mesh.position.set(-3,4,-9);e.baseX=-3;e.baseY=4;e.speed=0;v.shot=100;
+      for(const b of v.bullets)v.disposeObject(b.mesh);v.bullets=[];
       v.renderer.render(v.scene,v.camera);
       const geometry=[];v.stageScenery.traverse(o=>{if(o.geometry)geometry.push(o.geometry.type);});
       return {world:v.stageScenery.userData.theme,model:e.mesh.userData.modelType,geometry:geometry.sort().join(',')};
@@ -159,6 +160,7 @@ test('five worlds and five enemy silhouettes have distinct geometry',async({page
     worlds.push(result.world);models.push(result.model);shapes.push(result.geometry);
     await page.evaluate(()=>{window.__fixture.state().status='playing';});
     await expect(page.locator('#sector')).toHaveText(`STAGE 0${stage} / 05`);
+    await expect(page.locator('#announcement')).toContainText(`STAGE 0${stage} / 05`);
     await page.evaluate(()=>{window.__fixture.state().status='paused';});
     expect(result.geometry.length).toBeGreaterThan(0);
     await page.screenshot({path:info.outputPath(`stage-${stage}-world-enemy.png`)});
