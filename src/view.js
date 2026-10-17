@@ -295,7 +295,53 @@ export class FlightView {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, value ? 1 : 1.7));
     this.resize();
   }
+  syncGroundShadows() {
+    // Scene-level projections stay flat on the ground while aircraft bank above them.
+    // A shared 32px soft mask costs one small quad per actor, including reduced FX mode.
+    this.groundShadows ??= new Map();
+    const actors = new Set([this.car, ...this.entities.map(e => e.mesh), this.bossMesh].filter(Boolean));
+    for (const [actor, shadow] of this.groundShadows) {
+      if (!actors.has(actor)) {
+        this.scene.remove(shadow);
+        shadow.geometry.dispose(); shadow.material.dispose();
+        this.groundShadows.delete(actor);
+      }
+    }
+    if (!this.shadowTexture) {
+      const pixels = new Uint8Array(32 * 32 * 4);
+      for (let y=0;y<32;y++) for (let x=0;x<32;x++) {
+        const i=(y*32+x)*4, radius=Math.hypot((x-15.5)/15.5,(y-15.5)/15.5);
+        pixels[i]=pixels[i+1]=pixels[i+2]=255;
+        pixels[i+3]=Math.round(255*Math.pow(Math.max(0,1-radius*radius),1.3));
+      }
+      this.shadowTexture=new THREE.DataTexture(pixels,32,32);
+      this.shadowTexture.magFilter=THREE.LinearFilter;
+      this.shadowTexture.minFilter=THREE.LinearFilter;
+      this.shadowTexture.needsUpdate=true;
+    }
+    for (const actor of actors) {
+      let shadow=this.groundShadows.get(actor);
+      if (!shadow) {
+        shadow=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({
+          map:this.shadowTexture,color:0x00020a,transparent:true,opacity:.7,depthWrite:false,
+          polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1,
+        }));
+        shadow.name='ground-shadow';shadow.userData.ownerUuid=actor.uuid;
+        shadow.rotation.x=-Math.PI/2;
+        this.scene.add(shadow);this.groundShadows.set(actor,shadow);
+      }
+      const height=Math.max(0,actor.position.y+.7),spread=1+Math.min(height,15)*.045;
+      const width=actor===this.car?3.8:actor===this.bossMesh?14:3.6;
+      const length=actor===this.car?5.5:actor===this.bossMesh?9:4;
+      shadow.position.set(actor.position.x,-.6,actor.position.z);
+      shadow.scale.set(width*spread,length*spread,1);
+      shadow.material.opacity=Math.max(.32,.86-height*.04);
+      shadow.visible=actor.visible;
+    }
+  }
   disposeObject(obj) {
+    const shadow=this.groundShadows?.get(obj);
+    if(shadow){this.scene.remove(shadow);shadow.geometry.dispose();shadow.material.dispose();this.groundShadows.delete(obj);}
     this.scene.remove(obj);
     obj.traverse((n) => {
       if (n.geometry) n.geometry.dispose();
@@ -656,6 +702,7 @@ export class FlightView {
       this.camera.position.x += (Math.random() - 0.5) * this.shake;
       this.camera.position.y += (Math.random() - 0.5) * this.shake;
     }
+    this.syncGroundShadows();
     this.renderer.render(this.scene, this.camera);
   }
 }

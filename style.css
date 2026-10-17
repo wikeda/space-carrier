@@ -461,14 +461,7 @@ body.playing #topbar {
 .boost:disabled {
   color: #78899d;
 }
-#reticle {
-  position: absolute;
-  left: 50%;
-  top: 45%;
-  color: #9bfff675;
-  font: 30px monospace;
-  transform: translate(-50%, -50%);
-}
+
 .overlay {
   position: fixed;
   inset: 0;

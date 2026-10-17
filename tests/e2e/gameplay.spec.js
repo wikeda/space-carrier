@@ -199,3 +199,43 @@ test('boss entrance clears fodder and is safe; active boss moves without fodder'
   await page.screenshot({path:info.outputPath('boss-active-no-fodder.png')});
   expect(errors).toEqual([]);
 });
+test('ground shadows render, follow every model and clean up without a reticle',async({page},info)=>{
+  const errors=await boot(page);
+  await expect(page.locator('#reticle')).toHaveCount(0);
+  const wave=await page.evaluate(()=>{
+    const v=window.__fixture.view(),s=window.__fixture.state();
+    s.status='paused';s.x=3;s.y=4;v.shot=100;
+    for(const b of v.bullets)v.disposeObject(b.mesh);v.bullets=[];
+    for(const e of v.entities)v.disposeObject(e.mesh);v.entities=[];
+    const random=Math.random;Math.random=()=>.8;try{v.enemy(s);}finally{Math.random=random;}
+    const e=v.entities.at(-1);e.mesh.position.set(-4,3,-8);e.baseX=-4;e.baseY=3;e.speed=0;
+    v.car.position.set(3,4,3);v.syncGroundShadows();
+    const shadow=v.groundShadows.get(e.mesh),carShadow=v.groundShadows.get(v.car);
+    v.renderer.render(v.scene,v.camera);const on=v.renderer.domElement.toDataURL();
+    for(const sh of v.groundShadows.values())sh.visible=false;
+    v.renderer.render(v.scene,v.camera);const off=v.renderer.domElement.toDataURL();
+    for(const sh of v.groundShadows.values())sh.visible=true;
+    v.renderer.render(v.scene,v.camera);
+    return {count:v.groundShadows.size,car:carShadow.position.toArray(),enemy:shadow.position.toArray(),opacity:shadow.material.opacity,pixelsDiffer:on!==off};
+  });
+  expect(wave.count).toBe(2);expect(wave.car[0]).toBe(3);expect(wave.car[2]).toBe(3);
+  expect(wave.enemy[0]).toBe(-4);expect(wave.enemy[2]).toBe(-8);expect(wave.opacity).toBeGreaterThan(0);expect(wave.pixelsDiffer).toBe(true);
+  await page.screenshot({path:info.outputPath('player-enemy-ground-shadows.png')});
+  const follow=await page.evaluate(()=>{
+    const v=window.__fixture.view(),e=v.entities.at(-1),shadow=v.groundShadows.get(e.mesh);
+    e.mesh.position.set(5,6,-15);v.syncGroundShadows();
+    const position=shadow.position.toArray();v.disposeObject(e.mesh);v.entities=[];
+    return{position,mapped:v.groundShadows.has(e.mesh),parent:!!shadow.parent};
+  });
+  expect(follow.position[0]).toBe(5);expect(follow.position[2]).toBe(-15);expect(follow.mapped).toBe(false);expect(follow.parent).toBe(false);
+  const boss=await page.evaluate(async()=>{
+    const g=await import('/src/game.js'),v=window.__fixture.view(),s=window.__fixture.state();
+    s.status='playing';s.invincible=1000;while(s.phase==='wave'||s.phase==='bossIntro')g.step(s,.05);
+    v.tick(.01,s,true);s.status='paused';v.syncGroundShadows();
+    const sh=v.groundShadows.get(v.bossMesh);return{count:v.groundShadows.size,shadow:sh.position.toArray(),boss:v.bossMesh.position.toArray(),opacity:sh.material.opacity};
+  });
+  expect(boss.count).toBe(2);expect(boss.shadow[0]).toBe(boss.boss[0]);expect(boss.shadow[2]).toBe(boss.boss[2]);expect(boss.opacity).toBeGreaterThan(0);
+  await page.screenshot({path:info.outputPath('boss-ground-shadow.png')});
+  const cleanup=await page.evaluate(()=>{const v=window.__fixture.view();v.reset();v.syncGroundShadows();return{count:v.groundShadows.size,player:v.groundShadows.has(v.car)};});
+  expect(cleanup).toEqual({count:1,player:true});expect(errors).toEqual([]);
+});
